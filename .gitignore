@@ -29,6 +29,9 @@ json/*.json
 settings.ini
 .env
 
+# Ensure the parent directory (json/) itself is tracked
+!json/
+
 # Include JSON files starting with "prompt"
 !json/prompt*.json
 
