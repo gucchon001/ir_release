@@ -1,0 +1,56 @@
+# プログラム仕様書
+
+## 1. フォルダ構造とファイルの種類
+
+```
+ir_news_release/
+│
+├── .gitignore (その他)
+├── .req_hash (その他)
+├── README.md (その他)
+│
+├── config/ 
+│   ├── boxwood-dynamo-384411-6dec80faabfc.json (設定ファイル)
+│   ├── secrets.env (設定ファイル)
+│   └── settings.ini (設定ファイル)
+│
+├── data/ 
+│   └── E05028_S100UMLY.pdf (その他)
+│
+├── docs/ 
+│   ├── .gitkeep (その他)
+│   ├── detail_spec.txt (その他)
+│   ├── merge.txt (その他)
+│   └── requirements_spec.txt (その他)
+│
+├── requirements.txt (その他)
+├── run.bat (その他)
+├── spec_tools_run.bat (その他)
+│
+├── src/ 
+│   ├── __init__.py (Pythonコード)
+│   ├── main.py (Pythonコード)
+│   ├── modules/
+│   │   ├── __init__.py (Pythonコード)
+│   │   ├── edinet/
+│   │   │   ├── config.py (Pythonコード)
+│   │   │   └── operations.py (Pythonコード)
+│   │   └── module1.py (Pythonコード)
+│   └── utils/
+│       ├── __init__.py (Pythonコード)
+│       ├── config.py (Pythonコード)
+│       ├── helpers.py (Pythonコード)
+│       └── logging_config.py (Pythonコード)
+│
+└── tests/
+    ├── __init__.py (Pythonコード)
+    ├── test_log.py (Pythonコード)
+    └── test_spreadsheet.py (Pythonコード)
+```
+
+フォルダ数：8
+ファイル数：23 (Pythonコード：13, 設定ファイル：3, その他：7)
+
+## 2. ファイルごとの役割と依存関係
+
+| ファイル名               | 役割                                                                

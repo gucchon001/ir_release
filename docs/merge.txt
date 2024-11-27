@@ -1,0 +1,2219 @@
+ir_news_release
+├── .gitignore
+├── .pytest_cache
+│   ├── .gitignore
+│   ├── CACHEDIR.TAG
+│   ├── README.md
+│   └── v
+│       └── cache
+│           ├── lastfailed
+│           ├── nodeids
+│           └── stepwise
+├── .req_hash
+├── README.md
+├── config
+│   ├── boxwood-dynamo-384411-6dec80faabfc.json
+│   ├── prompt_financial_report.json
+│   ├── secrets.env
+│   └── settings.ini
+├── data
+│   ├── E05024_S100UIEO.pdf
+│   ├── E05028_S100UMLK.pdf
+│   └── E05028_S100UMLY.pdf
+├── docs
+│   ├── .gitkeep
+│   ├── detail_spec.txt
+│   ├── generate_detailed_spec.txt
+│   ├── merge.txt
+│   └── requirements_spec.txt
+├── downloads
+│   ├── E04824_S100UPMY_20241113.pdf
+│   ├── E04941_S100UIVM_20241011.pdf
+│   ├── E05067_S100UJ27_20241011.pdf
+│   ├── test_document.md
+│   └── test_document.pdf
+├── requirements.txt
+├── run.bat
+├── spec_tools_run.bat
+├── src
+│   ├── __init__.py
+│   ├── main.py
+│   ├── modules
+│   │   ├── __init__.py
+│   │   ├── edinet
+│   │   │   ├── __init__.py
+│   │   │   ├── config.py
+│   │   │   └── operations.py
+│   │   ├── pdfSummary
+│   │   │   ├── __init__.py
+│   │   │   ├── drive_handler.py
+│   │   │   ├── extractor.py
+│   │   │   ├── pdf_main.py
+│   │   │   ├── summarizer.py
+│   │   │   └── tokenizer.py
+│   │   ├── setup.py
+│   │   ├── slack
+│   │   │   ├── drive_handler.py
+│   │   │   └── slack_notify.py
+│   │   └── spreadsheet_to_edinet.py
+│   └── utils
+│       ├── __init__.py
+│       ├── drive_uploader.py
+│       ├── environment.py
+│       ├── helpers.py
+│       ├── logging_config.py
+│       ├── spreadsheet.py
+│       └── xxxconfig.py
+└── tests
+    ├── README.md
+    ├── __init__.py
+    ├── test_drive_file.py
+    ├── test_log.py
+    ├── test_slack_notify.py
+    ├── test_slack_notify_with_file.py
+    ├── test_spreadsheet.py
+    └── test_template.py
+
+# Merged Python Files
+
+
+================================================================================
+File: src\__init__.py
+================================================================================
+
+ 
+
+
+================================================================================
+File: src\main.py
+================================================================================
+
+from typing import Callable, Optional, Any
+from datetime import datetime
+
+from modules.edinet.operations import EDINETOperations
+from modules.edinet.config import EDINETConfig
+from modules.spreadsheet_to_edinet import process_spreadsheet_data
+from utils.spreadsheet import SpreadsheetService
+from utils.environment import EnvironmentUtils as env
+from utils.logging_config import get_logger
+
+# 共通ロガー
+logger = get_logger()
+
+
+def initialize_debug_tools() -> None:
+    """
+    デバッグツールを初期化
+    """
+    try:
+        use_icecream = env.get_config_value(env.get_environment(), "USE_ICECREAM", default=False)
+        # ロガー初期化時にIceCreamの設定を反映
+        get_logger(use_icecream=use_icecream)
+    except Exception as e:
+        logger.error(f"Failed to initialize debug tools: {e}")
+        raise
+
+def run_process(process_func: Callable, config: Optional[Any] = None) -> None:
+    """汎用プロセス実行関数"""
+    try:
+        logger.info(f"Starting process: {process_func.__name__}")
+        process_func(config)
+        logger.info(f"Process {process_func.__name__} completed successfully.")
+    except Exception as e:
+        logger.error(f"Error in {process_func.__name__}: {e}", exc_info=True)
+        raise RuntimeError(f"Process {process_func.__name__} failed.") from e
+
+
+def edinet_process(config: EDINETConfig) -> None:
+    """
+    EDINET API を使用して指定された期間内のドキュメントを取得
+    """
+    edinet = EDINETOperations(
+        base_url=config.base_url,
+        api_key=config.api_key,
+        parent_folder_id=config.parent_folder_id,
+        service_account_file=config.service_account_file,
+    )
+
+    start_date_str = env.get_config_value("DATE_RANGE", "start_date")
+    end_date_str = env.get_config_value("DATE_RANGE", "end_date")
+
+    if not start_date_str or not end_date_str:
+        raise ValueError("DATE_RANGE section or required keys are missing in the settings.ini file.")
+
+    logger.debug(f"Fetching documents from {start_date_str} to {end_date_str}")
+
+    start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+    end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
+    logger.debug(f"Fetching documents from {start_date} to {end_date}")
+
+    spreadsheet_service = SpreadsheetService()
+    spreadsheet_id = spreadsheet_service.get_spreadsheet_id("SPREADSHEET", "ss_id_list")
+    list_data = spreadsheet_service.get_sheet_data(spreadsheet_id, "list")
+
+    if not list_data or len(list_data) < 2:
+        logger.error("Spreadsheet data is empty or invalid format.")
+        raise ValueError("Spreadsheet data is empty or invalid format.")
+
+    headers = list_data[0]
+    data_rows = list_data[1:]
+    edinet_code_index = headers.index("EDINET_code")
+    edinet_codes_from_sheet = [row[edinet_code_index] for row in data_rows]
+
+    logger.info(f"Edinet codes from spreadsheet: {edinet_codes_from_sheet}")
+
+    documents = edinet.get_documents_for_date_range(
+        start_date=start_date,
+        end_date=end_date,
+        edinet_codes_from_sheet=edinet_codes_from_sheet
+    )
+
+    logger.info(f"Total documents retrieved: {len(documents)}")
+    for document in documents:
+        logger.info(f"Retrieved Document - ID: {document.get('docID')}, Description: {document.get('docDescription')}")
+
+
+def main() -> None:
+    """メイン処理"""
+    try:
+        # 環境変数のロード
+        env.load_env()
+
+        # 設定ファイルの取得
+        config_path = env.get_config_file()
+        logger.info(f"Config file located at: {config_path}")
+
+        # EDINETの設定を初期化
+        edinet_config = EDINETConfig()
+        edinet_config.config_path = config_path
+
+        logger.info("Logger initialized successfully.")
+        logger.info(f"Current environment: {env.get_environment()}")
+
+        # デバッグツールの初期化
+        initialize_debug_tools()
+
+        # 各プロセスの実行
+        run_process(edinet_process, edinet_config)
+        run_process(process_spreadsheet_data, edinet_config)
+
+    except Exception as e:
+        logger.error(f"Fatal error in main execution: {e}", exc_info=True)
+
+
+if __name__ == "__main__":
+    main()
+
+
+================================================================================
+File: src\modules\__init__.py
+================================================================================
+
+# src/modules/__init__.py
+from . import pdfSummary
+from . import edinet
+
+================================================================================
+File: src\modules\edinet\__init__.py
+================================================================================
+
+ 
+
+
+================================================================================
+File: src\modules\edinet\config.py
+================================================================================
+
+import os
+from pathlib import Path
+from typing import Optional
+from utils.environment import EnvironmentUtils as env
+from utils.logging_config import get_logger
+
+# 名前付きロガーを取得
+logger = get_logger(__name__)
+
+class EDINETConfig:
+    REQUIRED_KEYS = ['base_url', 'api_key', 'parent_folder_id']
+
+    def __init__(self, environment: Optional[str] = None):
+        """
+        EDINETConfigの初期化
+
+        Args:
+            environment (Optional[str]): 環境名（デフォルトは現在の環境を自動取得）
+        """
+        self.environment = environment or env.get_environment()
+        self.settings = {}
+
+        logger.info(f"Initializing EDINETConfig for environment: {self.environment}")
+
+        # .envファイルをロード
+        self._load_env()
+
+        # 設定の読み込みと検証
+        self._load_settings()
+        self._validate_settings()
+
+    def _load_env(self):
+        """
+        環境変数をロードする
+        """
+        try:
+            env.load_env()
+            logger.info("Environment variables loaded successfully.")
+
+            # デバッグ用：主要な環境変数を確認
+            for key in ["EDINET_API_KEY", "SERVICE_ACCOUNT_FILE"]:
+                logger.debug(f"{key}: {os.getenv(key)}")
+        except FileNotFoundError as e:
+            logger.error(f"Environment file not found: {e}")
+            raise
+
+    def _load_settings(self):
+        """
+        EnvironmentUtilsを利用して設定を読み込む
+        """
+        try:
+            # 環境変数または設定ファイルから設定をロード
+            self.settings['api_key'] = env.get_env_var("EDINET_API_KEY", default=env.get_config_value("EDINET", "api_key"))
+            if not self.settings['api_key']:
+                logger.warning("API key is missing. Please set 'EDINET_API_KEY' or define it in settings.ini.")
+
+            self.settings['base_url'] = env.get_config_value('EDINET', 'base_url', default="https://disclosure.edinet-fsa.go.jp/api/v1")
+            self.settings['parent_folder_id'] = env.get_config_value('DRIVE', 'parent_folder_id', default="")
+
+            # サービスアカウントファイルをsecrets.envまたは設定ファイルから取得
+            service_account_file = env.get_env_var("SERVICE_ACCOUNT_FILE", default=env.get_config_value("GOOGLE", "service_account_file"))
+            if not service_account_file:
+                raise ValueError("Service account file is missing. Please set 'SERVICE_ACCOUNT_FILE' in secrets.env or settings.ini.")
+
+            self.settings['service_account_file'] = self._resolve_path(service_account_file)
+            self.settings['download_dir'] = env.get_config_value('EDINET', 'download_dir', default="data/edinet")
+
+            logger.info("Configuration settings loaded successfully.")
+            logger.debug(f"Loaded settings: {self.settings}")
+        except Exception as e:
+            logger.error(f"Failed to load settings: {e}")
+            raise
+
+    def _validate_settings(self):
+        """
+        設定値の検証
+
+        Raises:
+            ValueError: 必須キーが欠落している場合
+        """
+        logger.info("Validating configuration settings...")
+        missing_keys = [key for key in self.REQUIRED_KEYS if not self.settings.get(key)]
+        if not self.settings.get('service_account_file'):
+            missing_keys.append('service_account_file')
+
+        if missing_keys:
+            logger.error(f"Missing required configuration keys: {', '.join(missing_keys)}")
+            raise ValueError(f"Missing required configuration keys: {', '.join(missing_keys)}")
+        logger.info("All required settings are valid.")
+
+    def _resolve_path(self, path: str) -> Path:
+        """
+        指定されたパスをプロジェクトルートに基づいて解決します。
+
+        Args:
+            path (str): 相対パスまたは絶対パス
+
+        Returns:
+            Path: 解決された絶対パス
+        """
+        resolved_path = Path(path)
+        if not resolved_path.is_absolute():
+            resolved_path = env.get_project_root() / resolved_path
+
+        logger.debug(f"Resolving path: input={path}, resolved={resolved_path}")
+
+        if not resolved_path.exists():
+            logger.error(f"Resolved path does not exist: {resolved_path}")
+            raise FileNotFoundError(f"Resolved path does not exist: {resolved_path}")
+
+        return resolved_path
+
+    @property
+    def base_url(self) -> str:
+        """
+        EDINET APIのベースURLを取得
+        """
+        return self.settings.get('base_url')
+
+    @property
+    def api_key(self) -> str:
+        """
+        EDINET APIキーを取得
+        """
+        return self.settings.get('api_key')
+
+    @property
+    def parent_folder_id(self) -> str:
+        """
+        Google Driveの親フォルダIDを取得
+        """
+        return self.settings.get('parent_folder_id')
+
+    @property
+    def service_account_file(self) -> Path:
+        """
+        サービスアカウントファイルのパスを取得
+        """
+        return self.settings.get('service_account_file')
+
+    def get_download_dir(self) -> Path:
+        """
+        ダウンロードディレクトリのパスを取得
+
+        Returns:
+            Path: ダウンロードディレクトリのパス
+        """
+        download_dir = Path(self.settings.get('download_dir'))
+        if not download_dir.is_absolute():
+            download_dir = env.get_project_root() / download_dir
+        download_dir.mkdir(parents=True, exist_ok=True)
+        return download_dir
+
+
+================================================================================
+File: src\modules\edinet\operations.py
+================================================================================
+
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional
+import requests
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from utils.environment import EnvironmentUtils as env
+from utils.logging_config import get_logger
+import os
+
+# 名前付きロガーを取得
+logger = get_logger(__name__)
+
+class EDINETOperations:
+    """EDINET API操作クラス"""
+
+    TARGET_DOC_TYPES: Dict[str, str] = {
+        '120': '有価証券報告書',
+        '140': '四半期報告書',
+        '160': '半期報告書'
+    }
+
+    def __init__(self, base_url=None, api_key=None, parent_folder_id=None, service_account_file=None):
+        """
+        EDINETOperations クラスの初期化
+        """
+        logger.info("Initializing EDINET Operations...")
+
+        # 環境変数をロード
+        env.load_env()
+
+        # 必要な設定をEnvironmentUtilsから取得
+        try:
+            self.base_url = base_url or env.get_config_value("EDINET", "base_url")
+            self.api_key = api_key or os.getenv("EDINET_API_KEY")  # 環境変数から取得
+            self.parent_folder_id = parent_folder_id or env.get_config_value("DRIVE", "parent_folder_id")
+            self.service_account_file = service_account_file or env.get_service_account_file()
+
+            # 設定値が不足している場合にエラーをスロー
+            missing_config = []
+            if not self.base_url:
+                missing_config.append("base_url")
+            if not self.api_key:
+                missing_config.append("api_key")
+            if not self.service_account_file:
+                missing_config.append("service_account_file")
+
+            if missing_config:
+                raise ValueError(f"Missing required configuration values: {', '.join(missing_config)}")
+            
+            logger.debug(f"Config settings: base_url={self.base_url}, api_key=***, parent_folder_id={self.parent_folder_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to initialize EDINETOperations: {e}")
+            raise
+
+        # Google Drive APIを初期化
+        self.drive_service = None
+        self.initialize_drive_service()
+
+    def initialize_drive_service(self):
+        """Google Drive APIサービスの初期化"""
+        try:
+            credentials = service_account.Credentials.from_service_account_file(
+                str(self.service_account_file),
+                scopes=['https://www.googleapis.com/auth/drive.file']
+            )
+            self.drive_service = build('drive', 'v3', credentials=credentials)
+            logger.info("Google Drive service initialized successfully.")
+        except Exception as e:
+            logger.error(f"Failed to initialize Drive service: {e}")
+            self.drive_service = None
+
+    def get_documents_for_date_range(self, start_date: datetime, end_date: datetime, edinet_codes_from_sheet: List[str]) -> List[Dict]:
+        """
+        指定期間のEDINET文書を取得
+
+        Args:
+            start_date (datetime): 開始日
+            end_date (datetime): 終了日
+            edinet_codes_from_sheet (List[str]): スプレッドシートから取得したEDINETコードリスト
+
+        Returns:
+            List[Dict]: 文書情報のリスト
+        """
+        documents = []
+        total_days = (end_date - start_date).days + 1
+
+        for day_offset in range(total_days):
+            target_date = (start_date + timedelta(days=day_offset)).strftime('%Y-%m-%d')
+            logger.debug(f"Fetching documents for date: {target_date}")
+
+            try:
+                url = f"{self.base_url}/documents.json"
+                params = {
+                    "date": target_date,
+                    "type": "2",
+                    "Subscription-Key": self.api_key
+                }
+                response = requests.get(url, params=params)
+
+                if response.status_code != 200:
+                    logger.warning(f"Non-successful response for date {target_date}: {response.text}")
+                    continue
+
+                data = response.json()
+                results = data.get('results', [])
+
+                # フィルタリング対象のEDINETコードのみ取得
+                filtered_results = [
+                    doc for doc in results
+                    if (doc.get('edinetCode') in edinet_codes_from_sheet and
+                        doc.get('docTypeCode') in self.TARGET_DOC_TYPES and
+                        doc.get('pdfFlag') == '1')
+                ]
+
+                logger.info(f"Filtered results count for {target_date}: {len(filtered_results)}")
+                documents.extend(filtered_results)
+
+            except Exception as e:
+                logger.error(f"Failed to fetch documents for date {target_date}: {e}")
+
+        logger.info(f"Total documents retrieved for date range: {len(documents)}")
+        return documents
+
+    def fetch_document_data(self, doc_id: str, doc_type_code: str) -> Optional[bytes]:
+        """
+        EDINET APIからPDFデータを取得
+
+        Args:
+            doc_id (str): ドキュメントID
+            doc_type_code (str): ドキュメントタイプコード
+
+        Returns:
+            Optional[bytes]: PDFデータ、またはNone
+        """
+        url = f"{self.base_url}/documents/{doc_id}"
+        params = {
+            "type": "2",  # PDFデータ形式を指定
+            "Subscription-Key": self.api_key,
+        }
+
+        logger.info(f"Requesting PDF document. URL: {url}, Params: {params}")
+
+        try:
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+
+            # PDFフォーマットチェック
+            if not response.content.startswith(b'%PDF-'):
+                logger.error(f"Invalid PDF format for doc_id {doc_id}.")
+                return None
+
+            logger.info(f"Successfully fetched PDF document for doc_id {doc_id}. Size: {len(response.content)} bytes")
+            return response.content
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to fetch document for doc_id {doc_id}: {e}")
+            return None
+
+
+================================================================================
+File: src\modules\pdfSummary\__init__.py
+================================================================================
+
+ 
+# src/modules/pdfSummary/__init__.py
+from . import pdf_main
+from . import extractor
+from . import tokenizer
+from . import summarizer
+from . import drive_handler
+
+================================================================================
+File: src\modules\pdfSummary\drive_handler.py
+================================================================================
+
+# drive_handler.py
+from utils.logging_config import get_logger
+from pathlib import Path
+from datetime import datetime
+from googleapiclient.http import MediaIoBaseDownload
+
+logger = get_logger(__name__)
+
+class DriveHandler:
+    def __init__(self, drive_uploader):
+        self.drive_uploader = drive_uploader
+
+    def save_summary_to_drive(self, folder_id, summary, file_name):
+        """
+        要約を Google Drive に保存します。一意のファイル名を生成するため、タイムスタンプを付与します。
+        """
+        # タイムスタンプを生成しファイル名に追加
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_file_name = f"{Path(file_name).stem}_{timestamp}{Path(file_name).suffix}"
+        logger.info(f"要約を Google Drive に保存します。ファイル名: {unique_file_name}")
+
+        # ファイルをアップロード
+        file_id = self.drive_uploader.upload_file(
+            file_name=unique_file_name,
+            file_content=summary.encode("utf-8"),
+            folder_id=folder_id,
+            mime_type="text/markdown"
+        )
+        logger.info(f"要約を Google Drive に保存しました。ファイル ID: {file_id}")
+        return file_id
+
+    def download_pdf_from_drive(self, file_id: str) -> str:
+        """
+        Google Drive からPDFファイルをダウンロードする
+
+        Args:
+            file_id (str): ダウンロードするファイルの Google Drive ID
+
+        Returns:
+            str: ダウンロードしたファイルのローカルパス
+        """
+        try:
+            # ファイルのメタデータを取得
+            file_metadata = self.drive_uploader.drive_service.files().get(fileId=file_id).execute()
+            file_name = file_metadata.get('name')
+            
+            # ダウンロード先のパスを設定
+            download_dir = Path("downloads")
+            download_dir.mkdir(exist_ok=True)
+            local_path = download_dir / file_name
+
+            # ファイルをダウンロード
+            request = self.drive_uploader.drive_service.files().get_media(fileId=file_id)
+            with open(local_path, 'wb') as f:
+                downloader = MediaIoBaseDownload(f, request)
+                done = False
+                while done is False:
+                    status, done = downloader.next_chunk()
+                    if status:
+                        logger.info(f"Download {int(status.progress() * 100)}%.")
+
+            logger.info(f"ファイルをダウンロードしました: {local_path}")
+            return str(local_path)
+
+        except Exception as e:
+            logger.error(f"ファイルのダウンロード中にエラーが発生しました: {e}")
+            raise
+
+================================================================================
+File: src\modules\pdfSummary\extractor.py
+================================================================================
+
+import pymupdf
+from utils.logging_config import get_logger  # 修正: 絶対パスを使用
+
+logger = get_logger(__name__)
+
+def extract_text_from_pdf(pdf_path):
+    """
+    PyMuPDF を使用してPDFからテキストを抽出します。
+
+    Args:
+        pdf_path (str): PDFファイルのパス。
+
+    Returns:
+        str: 抽出されたテキスト。
+    """
+    logger.info(f"PDF ファイルからテキストを抽出: {pdf_path}")
+    text = ""
+    try:
+        doc = pymupdf.open(pdf_path)
+        for page_num, page in enumerate(doc, start=1):
+            page_text = page.get_text()
+            if page_text:
+                text += page_text + "\n\n"
+            logger.debug(f"ページ {page_num}: テキスト抽出完了")
+    except Exception as e:
+        logger.error(f"PyMuPDF によるテキスト抽出に失敗しました: {e}")
+        raise
+    logger.info(f"抽出されたテキストの合計文字数: {len(text)}")
+    return text
+
+
+================================================================================
+File: src\modules\pdfSummary\pdf_main.py
+================================================================================
+
+#pdf_main.py
+from openai import OpenAI
+from pathlib import Path
+import json
+
+from utils.environment import EnvironmentUtils as env
+from utils.drive_uploader import DriveUploader
+from .extractor import extract_text_from_pdf
+from .tokenizer import Tokenizer
+from .summarizer import Summarizer
+from .drive_handler import DriveHandler
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
+def load_prompt(file_path: str) -> list:
+    """
+    プロンプトファイルをロードする
+
+    Args:
+        file_path (str): プロンプトファイルのパス
+
+    Returns:
+        list: プロンプトメッセージのリスト
+    """
+    try:
+        with open(file_path, "r", encoding="utf-8") as file:
+            prompt_data = json.load(file)
+            return prompt_data["messages"]
+    except Exception as e:
+        logger.error(f"プロンプトのロード中にエラーが発生しました: {e}")
+        raise
+
+def process_pdf(pdf_path, folder_id, drive_uploader=None):
+    """
+    PDF を処理して要約を作成し、Google Drive に保存します。
+
+    Args:
+        pdf_path (str): PDF ファイルのパス。
+        folder_id (str): 要約を保存する Google Drive フォルダの ID。
+        drive_uploader (DriveUploader, optional): 既存のDriveUploaderインスタンス。
+
+    Returns:
+        list: Google Drive に保存された要約ファイルの ID のリスト。
+    """
+    logger.info(f"PDF 処理を開始: {pdf_path}")
+
+    # 環境変数をロード
+    try:
+        env.load_env()
+        logger.info("環境変数を正常にロードしました。")
+    except Exception as e:
+        logger.error(f"環境変数のロード中にエラーが発生しました: {e}")
+        raise
+
+    # 必要な情報をロード
+    api_key = env.get_openai_api_key()
+    model = env.get_openai_model()
+    max_chunk_tokens = 2000  # 分割サイズ
+    max_summary_tokens = 2000  # 要約トークン制限
+
+    # プロンプトをロード
+    prompt_path = env.get_config_value("OPENAI", "prompt_financial_report", default="config/prompt_financial_report.json")
+    prompt_file_path = env.resolve_path(prompt_path)
+    try:
+        prompt_messages = load_prompt(prompt_file_path)
+        logger.info("プロンプトを正常にロードしました。")
+    except Exception as e:
+        logger.error(f"プロンプトのロードに失敗しました: {e}")
+        raise
+
+    # 必要なインスタンスを生成
+    client = OpenAI(api_key=api_key)
+    tokenizer = Tokenizer(model, max_chunk_tokens)
+    summarizer = Summarizer(client, model, max_summary_tokens, prompt_messages)
+
+    # DriveHandlerのインスタンス生成（既存のDriveUploaderがあれば使用）
+    if drive_uploader is None:
+        drive_uploader = DriveUploader()
+    drive_handler = DriveHandler(drive_uploader)
+
+    # PDFからテキストを抽出
+    try:
+        text = extract_text_from_pdf(pdf_path)
+        logger.debug(f"PDF テキスト抽出完了。最初の100文字: {text[:100]}...")
+    except Exception as e:
+        logger.error(f"PDF テキスト抽出中にエラーが発生しました: {e}")
+        raise
+
+    # テキストを分割し要約
+    try:
+        chunks = tokenizer.split_text_into_chunks(text)
+        summary = summarizer.summarize_text(chunks)
+        logger.debug(f"要約完了。最初の100文字: {summary[:100]}...")
+    except Exception as e:
+        logger.error(f"要約処理中にエラーが発生しました: {e}")
+        raise
+
+    # 要約をGoogle Driveに保存
+    try:
+        file_ids = []
+        if len(summary) > 10000:  # 要約が長すぎる場合に分割保存
+            parts = [summary[i:i+10000] for i in range(0, len(summary), 10000)]
+            for idx, part in enumerate(parts):
+                part_file_name = f"{Path(pdf_path).stem}_summary_part_{idx+1}.md"
+                file_id = drive_handler.save_summary_to_drive(folder_id, part, part_file_name)
+                file_ids.append(file_id)
+                logger.info(f"分割要約をGoogle Drive に保存しました。ファイル ID: {file_id}")
+        else:  # 通常保存
+            file_name = Path(pdf_path).stem + "_summary.md"
+            file_id = drive_handler.save_summary_to_drive(folder_id, summary, file_name)
+            file_ids.append(file_id)
+            logger.info(f"要約をGoogle Drive に保存しました。ファイル ID: {file_id}")
+        return file_ids
+    except Exception as e:
+        logger.error(f"Google Drive に保存中にエラーが発生しました: {e}")
+        raise
+
+def test_process_drive_file(file_id: str, drive_folder_id: str):
+    """
+    Google DriveのPDFファイルを処理するテスト関数
+    
+    Args:
+        file_id (str): 処理対象のPDFファイルのGoogle Drive ID
+        drive_folder_id (str): 保存先フォルダのGoogle Drive ID
+    """
+    try:
+        # DriveUploaderとDriveHandlerのインスタンス作成
+        drive_uploader = DriveUploader()
+        drive_handler = DriveHandler(drive_uploader)
+        
+        # PDFファイルをダウンロードして処理
+        local_pdf_path = drive_handler.download_pdf_from_drive(file_id)
+        if local_pdf_path:
+            # PDFの処理 - 同じDriveUploaderインスタンスを渡す
+            result = process_pdf(local_pdf_path, drive_folder_id, drive_uploader)
+            
+            if result:
+                print(f"処理が完了しました。結果のファイルID: {result}")
+            else:
+                print("PDFの処理に失敗しました")
+        else:
+            print("PDFのダウンロードに失敗しました")
+            
+    except Exception as e:
+        print(f"エラーが発生しました: {e}")
+        raise
+
+
+================================================================================
+File: src\modules\pdfSummary\summarizer.py
+================================================================================
+
+import tiktoken
+from concurrent.futures import ThreadPoolExecutor
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
+class Summarizer:
+    def __init__(self, client, model, max_summary_tokens, prompt_messages):
+        self.client = client
+        self.model = model
+        self.max_summary_tokens = max_summary_tokens
+        self.prompt_messages = prompt_messages
+        self.encoding = tiktoken.encoding_for_model(model)  # tiktoken のエンコーディングを取得
+
+    def summarize_chunk(self, chunk):
+        """
+        単一のチャンクを要約します。
+        """
+        logger.info("チャンクを要約します。")
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    *self.prompt_messages,  # プロンプトメッセージを適用
+                    {"role": "user", "content": chunk}
+                ],
+                max_tokens=self.max_summary_tokens,
+                temperature=0.7
+            )
+            summary = response.choices[0].message.content.strip()
+            logger.debug(f"要約結果: {summary[:100]}...")
+            return summary
+        except Exception as e:
+            logger.error(f"チャンクの要約に失敗しました: {e}")
+            raise
+
+    def summarize_text(self, chunks):
+        """
+        複数のチャンクをまとめて要約。
+        """
+        logger.info("複数チャンクをまとめて要約します。")
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    *self.prompt_messages,
+                    {"role": "user", "content": "\n\n".join(chunks)}
+                ],
+                max_tokens=self.max_summary_tokens,
+                temperature=0.7
+            )
+            summary = response.choices[0].message.content.strip()
+            logger.info("要約完了。")
+            return summary
+        except Exception as e:
+            logger.error(f"要約全体の処理に失敗しました: {e}")
+            raise
+
+    def _summarize_recursive(self, summaries):
+        """
+        部分要約が長すぎる場合、さらに分割して再要約します。
+        """
+        combined_summary = " ".join(summaries)
+        token_count = len(self.encoding.encode(combined_summary))  # トークン数を計算
+
+        if token_count <= self.max_summary_tokens:
+            return self.summarize_chunk(combined_summary)  # トークン数内なら要約
+
+        logger.info("再要約のため、要約をさらに分割します。")
+        midpoint = len(summaries) // 2
+        left_summary = self._summarize_recursive(summaries[:midpoint])
+        right_summary = self._summarize_recursive(summaries[midpoint:])
+
+        return self.summarize_chunk(f"{left_summary} {right_summary}")
+
+
+================================================================================
+File: src\modules\pdfSummary\tokenizer.py
+================================================================================
+
+from sentence_transformers import SentenceTransformer, util
+import tiktoken
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
+class Tokenizer:
+    def __init__(self, model, max_chunk_tokens):
+        self.encoding = tiktoken.encoding_for_model(model)
+        self.max_chunk_tokens = max_chunk_tokens
+        self.sentence_model = SentenceTransformer('all-MiniLM-L6-v2')  # センテンスエンベディングモデル
+
+    def count_tokens(self, text):
+        """テキスト内のトークン数をカウントします。"""
+        token_count = len(self.encoding.encode(text))
+        logger.debug(f"トークン数: {token_count}")
+        return token_count
+
+    def split_text_into_chunks(self, text):
+        """意味的に近いまとまりでテキストを分割します。"""
+        logger.info("テキストを意味的に分割します。")
+
+        # テキストを文単位に分割
+        sentences = [sentence.strip() for sentence in text.split(".") if sentence.strip()]
+        
+        # 各文をエンコードしてセンテンスエンベディングを取得
+        embeddings = self.sentence_model.encode(sentences, convert_to_tensor=True)
+
+        # 意味的に近い文をグループ化する
+        clusters = []
+        current_cluster = []
+        current_cluster_length = 0
+
+        for i, sentence in enumerate(sentences):
+            sentence_tokens = self.count_tokens(sentence)
+
+            if current_cluster_length + sentence_tokens > self.max_chunk_tokens:
+                clusters.append(" ".join(current_cluster))
+                current_cluster = []
+                current_cluster_length = 0
+
+            current_cluster.append(sentence)
+            current_cluster_length += sentence_tokens
+
+        if current_cluster:
+            clusters.append(" ".join(current_cluster))
+
+        logger.info(f"分割されたチャンク数: {len(clusters)}")
+        return clusters
+
+
+================================================================================
+File: src\modules\setup.py
+================================================================================
+
+# setup.py
+from setuptools import setup, find_packages
+
+setup(
+    name="ir_news_release",
+    version="0.1",
+    packages=find_packages(),
+    package_dir={"": "src"}
+)
+
+================================================================================
+File: src\modules\slack\drive_handler.py
+================================================================================
+
+from googleapiclient.discovery import build
+from google.oauth2 import service_account
+from pathlib import Path
+
+class DriveHandler:
+    def __init__(self, service_account_file: str):
+        """
+        Google Drive API のハンドラーを初期化します。
+
+        Args:
+            service_account_file (str): サービスアカウントのキー JSON ファイルのパス。
+        """
+        self.service_account_file = service_account_file
+        self.credentials = service_account.Credentials.from_service_account_file(
+            self.service_account_file, scopes=["https://www.googleapis.com/auth/drive.readonly"]
+        )
+        self.service = build("drive", "v3", credentials=self.credentials)
+
+    def get_file_content(self, file_id: str) -> str:
+        """
+        Google Drive ファイルの内容を取得します。
+
+        Args:
+            file_id (str): Google Drive のファイル ID。
+
+        Returns:
+            str: ファイルの内容。
+        """
+        try:
+            request = self.service.files().get_media(fileId=file_id)
+            file_content = request.execute()
+            return file_content.decode("utf-8")  # Markdown ファイルは通常 UTF-8 形式
+        except Exception as e:
+            raise RuntimeError(f"Google Drive ファイルの読み込み中にエラーが発生しました: {e}")
+
+
+================================================================================
+File: src\modules\slack\slack_notify.py
+================================================================================
+
+from pathlib import Path
+from slack_sdk import WebClient
+from slack_sdk.errors import SlackApiError
+from googleapiclient.errors import HttpError
+from utils.logging_config import get_logger
+from modules.drive_handler import DriveHandler
+
+logger = get_logger(__name__)
+
+class SlackNotifier:
+    def __init__(self, env_path: str = "config/secrets.env"):
+        # 環境変数のロード (前のコードと同じ)
+        ...
+
+    def send_message(self, channel: str, message: str):
+        # Slackメッセージ送信 (前のコードと同じ)
+        ...
+
+    def notify_with_file_content(self, channel: str, file_id: str, service_account_file: str):
+        """
+        Google Drive ファイルの内容を Slack に通知します。
+
+        Args:
+            channel (str): Slack チャネル ID または名前。
+            file_id (str): Google Drive のファイル ID。
+            service_account_file (str): サービスアカウントのキー JSON ファイルのパス。
+        """
+        try:
+            # Google Drive からファイル内容を取得
+            drive_handler = DriveHandler(service_account_file)
+            file_content = drive_handler.get_file_content(file_id)
+
+            logger.info(f"Slack にファイル内容を送信中: チャネル={channel}")
+            response = self.client.chat_postMessage(channel=channel, text=f"ファイル内容:\n{file_content}")
+            logger.info(f"Slack にファイル内容を送信しました: {response['message']['text']}")
+        except HttpError as e:
+            logger.error(f"Google Drive API エラー: {e}")
+            raise
+        except SlackApiError as e:
+            logger.error(f"Slack通知エラー: {e.response['error']}")
+            raise
+        except Exception as e:
+            logger.error(f"ファイル内容の通知中にエラーが発生しました: {e}")
+            raise
+
+    def send_message(self, channel: str, message: str):
+        """
+        Slack にメッセージを送信します。
+
+        Args:
+            channel (str): Slack チャネル ID または名前
+            message (str): 通知メッセージ
+        """
+        try:
+            logger.info(f"Slack に通知を送信中: チャネル={channel}, メッセージ={message}")
+            response = self.client.chat_postMessage(channel=channel, text=message)
+            logger.info(f"Slack通知に成功しました: {response['message']['text']}")
+        except SlackApiError as e:
+            logger.error(f"Slack通知エラー: {e.response['error']}")
+            raise
+
+    def send_file(self, channel: str, file_id: str, title: str = "Markdown File"):
+        """
+        Slack にファイルをアップロードして送信します。
+
+        Args:
+            channel (str): Slack チャネル ID または名前
+            file_id (str): Google Drive のファイル ID
+            title (str): ファイルのタイトル
+        """
+        try:
+            # Google Drive ファイルリンクを生成
+            file_url = f"https://drive.google.com/file/d/{file_id}/view"
+            logger.info(f"Slack にファイルリンクを送信中: チャネル={channel}, ファイルID={file_id}")
+
+            # メッセージ形式でリンクを送信
+            response = self.client.chat_postMessage(
+                channel=channel,
+                text=f"{title} のリンクを共有します:\n<{file_url}>"
+            )
+            logger.info(f"Slack ファイルリンクの送信に成功しました: {response['message']['text']}")
+        except SlackApiError as e:
+            logger.error(f"Slack ファイルリンク送信エラー: {e.response['error']}")
+            raise
+
+def test_slack_notification_with_file(slack_channel: str, message: str, file_id: str, env_path: str = "config/secrets.env"):
+    """
+    Slack通知をテストする関数 (メッセージ + ファイルリンク)。
+
+    Args:
+        slack_channel (str): 通知を送る Slack チャネル
+        message (str): 通知するメッセージ
+        file_id (str): Google Drive のファイル ID
+        env_path (str): .env ファイルのパス
+    """
+    try:
+        logger.info(f"Slack通知をテスト中: チャネル={slack_channel}, メッセージ={message}, ファイルID={file_id}")
+        notifier = SlackNotifier(env_path=env_path)
+        notifier.send_message(slack_channel, message)
+        notifier.send_file(slack_channel, file_id, title="要約ファイル")
+        print(f"Slack通知とファイルリンクを送信しました: チャネル={slack_channel}, メッセージ={message}, ファイルID={file_id}")
+    except Exception as e:
+        print(f"Slack通知中にエラーが発生しました: {e}")
+        logger.error(f"Slack通知中にエラーが発生しました: {e}")
+
+
+================================================================================
+File: src\modules\spreadsheet_to_edinet.py
+================================================================================
+
+from datetime import datetime
+
+from utils.environment import EnvironmentUtils as env
+from utils.spreadsheet import SpreadsheetService
+from utils.drive_uploader import DriveUploader
+from modules.edinet.operations import EDINETOperations
+from utils.logging_config import get_logger
+
+# 名前付きロガーを取得
+logger = get_logger(__name__)
+
+
+def log_download_to_sheet(spreadsheet_service, spreadsheet_id, log_sheet_name, log_data):
+    """
+    ダウンロードしたデータをログシートに記録する。
+    ヘッダーを動的に取得し、列を特定して操作する。
+    """
+    try:
+        sheet_data = spreadsheet_service.get_sheet_data(spreadsheet_id, log_sheet_name)
+
+        if not sheet_data:
+            logger.info(f"Log sheet '{log_sheet_name}' is empty. Initializing headers.")
+            # デフォルトのヘッダーを使用して初期化
+            default_headers = [
+                'Release_Date',
+                'EDINET_code',
+                'stock_code',
+                'corp_name',
+                'doc_type',
+                'drive_raw_data_file_name',
+                'drive_raw_data_file_url',
+                'timestamp'
+            ]
+            spreadsheet_service.update_sheet_data(
+                spreadsheet_id, log_sheet_name, [default_headers]
+            )
+            sheet_data = [default_headers]
+
+        # ヘッダー行を取得
+        headers = sheet_data[0]
+        logger.info(f"Retrieved headers: {headers}")
+
+        # データ行を追加
+        logger.info(f"Appending log data to sheet '{log_sheet_name}'.")
+        spreadsheet_service.append_sheet_data(
+            spreadsheet_id, log_sheet_name, log_data
+        )
+        logger.info("Log data appended successfully.")
+    except Exception as e:
+        logger.error(f"Failed to append log data to sheet '{log_sheet_name}': {e}")
+        raise
+
+
+def process_spreadsheet_data(config):
+    """
+    スプレッドシートデータを基に EDINET API を呼び出し、結果を Google Drive に直接保存。
+    結果を log シートに記録。
+    """
+    try:
+        # 環境変数と設定ファイルのロード
+        env.load_env()
+
+        # サービス初期化
+        spreadsheet_service = SpreadsheetService()
+        uploader = DriveUploader()
+
+        # スプレッドシートIDとログシート名を取得
+        spreadsheet_id = spreadsheet_service.get_spreadsheet_id("SPREADSHEET", "ss_id_list")
+        log_sheet_name = "log"
+
+        # 日付範囲を取得
+        start_date = datetime.strptime(
+            env.get_config_value("DATE_RANGE", "start_date"), "%Y-%m-%d"
+        )
+        end_date = datetime.strptime(
+            env.get_config_value("DATE_RANGE", "end_date"), "%Y-%m-%d"
+        )
+        logger.info(f"Using date range from settings: {start_date} to {end_date}")
+
+        # list シートのデータを取得
+        list_data = spreadsheet_service.get_sheet_data(spreadsheet_id, "list")
+        if not list_data:
+            logger.error("No data found in the 'list' sheet.")
+            return
+
+        headers = list_data[0]
+        data_rows = list_data[1:]
+        if "EDINET_code" not in headers:
+            logger.error("'EDINET_code' column not found in the 'list' sheet.")
+            return
+        edinet_code_index = headers.index("EDINET_code")
+
+        edinet_operations = EDINETOperations()
+
+        for row_index, row in enumerate(data_rows, start=2):
+            edinet_code = row[edinet_code_index]
+            stock_code = row[headers.index("stock_code")] if "stock_code" in headers else ""
+            corp_name = row[headers.index("corp_name")] if "corp_name" in headers else ""
+            logger.info(f"Processing row {row_index}: EDINET_code = {edinet_code}")
+
+            try:
+                documents = edinet_operations.get_documents_for_date_range(
+                    start_date, end_date, [edinet_code]
+                )
+
+                for document in documents:
+                    doc_id = document.get("docID")
+                    doc_type_code = document.get("docTypeCode")
+                    release_date = document.get("submitDateTime").split(" ")[0]
+                    doc_type_name = EDINETOperations.TARGET_DOC_TYPES.get(doc_type_code, "不明")
+
+                    # ファイル名生成
+                    file_name = f"{edinet_code}_{doc_id}_{release_date.replace('-', '')}.pdf"
+
+                    # フォルダの取得または作成
+                    folder_id = uploader.get_or_create_folder(
+                        folder_name=edinet_code,
+                        parent_folder_id=env.get_config_value("DRIVE", "parent_folder_id")
+                    )
+
+                    # ドキュメントデータを取得
+                    doc_data = edinet_operations.fetch_document_data(doc_id, doc_type_code)
+
+                    if doc_data:
+                        # Google Drive にアップロード
+                        file_id = uploader.upload_file(
+                            file_name=file_name,
+                            file_content=doc_data,
+                            folder_id=folder_id
+                        )
+
+                        # ログデータの作成と記録
+                        file_url = f"https://drive.google.com/file/d/{file_id}/view"
+                        log_data = [
+                            [
+                                release_date,
+                                edinet_code,
+                                stock_code,
+                                corp_name,
+                                doc_type_name,
+                                file_name,
+                                file_url,
+                                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            ]
+                        ]
+                        log_download_to_sheet(
+                            spreadsheet_service, spreadsheet_id, log_sheet_name, log_data
+                        )
+                        logger.info(f"File uploaded to Drive with URL: {file_url}")
+                    else:
+                        logger.warning(f"Failed to fetch document data: ID={doc_id}")
+
+            except Exception as e:
+                logger.error(f"Error processing EDINET_code {edinet_code}: {e}")
+    except Exception as e:
+        logger.error(f"Failed to process spreadsheet data: {e}")
+        raise
+
+
+================================================================================
+File: src\utils\__init__.py
+================================================================================
+
+ 
+
+
+================================================================================
+File: src\utils\drive_uploader.py
+================================================================================
+
+# src/utils/drive_uploader.py
+from pathlib import Path
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+from io import BytesIO
+from utils.environment import EnvironmentUtils as env
+from utils.logging_config import get_logger
+
+# 名前付きロガーを取得
+logger = get_logger(__name__)
+
+class DriveUploader:
+    def __init__(self):
+        """
+        DriveUploaderクラスの初期化。Google Drive APIを利用するための認証を行う。
+        """
+        # 環境変数をロード（必要に応じてsecrets.envを読み込む）
+        env.load_env()
+
+        # サービスアカウントファイルのパスを取得
+        try:
+            service_account_path = env.get_service_account_file()
+            logger.info(f"Resolved service account file path: {service_account_path}")
+        except FileNotFoundError as e:
+            logger.error(f"Service account file not found: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to resolve service account file: {e}")
+            raise
+
+        # Google Drive API用の認証情報をロード
+        try:
+            self.credentials = Credentials.from_service_account_file(
+                str(service_account_path),
+                scopes=[
+                    'https://www.googleapis.com/auth/drive',  # より広い権限を付与
+                    'https://www.googleapis.com/auth/drive.file'
+                ]
+            )
+            self.drive_service = build("drive", "v3", credentials=self.credentials)
+            logger.info("Google Drive APIの認証が正常に完了しました。")
+        except Exception as e:
+            logger.error(f"Google Drive API認証に失敗しました: {e}")
+            raise
+
+    def get_or_create_folder(self, folder_name, parent_folder_id=None):
+        """
+        Google Drive上で指定された名前のフォルダを取得、または新規作成する。
+
+        Args:
+            folder_name (str): フォルダ名。
+            parent_folder_id (str, optional): 親フォルダのID。
+
+        Returns:
+            str: フォルダID。
+        """
+        # フォルダ検索クエリを構築
+        query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+        if parent_folder_id:
+            query += f" and '{parent_folder_id}' in parents"
+
+        # フォルダを検索
+        try:
+            results = self.drive_service.files().list(
+                q=query, spaces="drive", fields="files(id, name)", pageSize=1
+            ).execute()
+            files = results.get("files", [])
+            if files:
+                folder_id = files[0]["id"]
+                logger.info(f"既存のフォルダを発見: '{folder_name}' (ID: {folder_id})")
+                return folder_id
+
+            # フォルダが存在しない場合は作成
+            folder_metadata = {
+                "name": folder_name,
+                "mimeType": "application/vnd.google-apps.folder",
+                "parents": [parent_folder_id] if parent_folder_id else [],
+            }
+            folder = self.drive_service.files().create(
+                body=folder_metadata, fields="id"
+            ).execute()
+            folder_id = folder.get("id")
+            logger.info(f"新規フォルダを作成: '{folder_name}' (ID: {folder_id})")
+            return folder_id
+        except Exception as e:
+            logger.error(f"フォルダの取得または作成に失敗しました: {e}")
+            raise
+
+    def upload_file(self, file_name, file_content, folder_id, mime_type="application/pdf"):
+        """
+        Google Driveにファイルをアップロードする。
+        既存の同名ファイルがある場合はスキップする。
+
+        Args:
+            file_name (str): アップロードするファイル名。
+            file_content (bytes): アップロードするファイルの内容。
+            folder_id (str): アップロード先のフォルダID。
+            mime_type (str): ファイルのMIMEタイプ（デフォルトはPDF）。
+
+        Returns:
+            str: アップロードされたファイルのID。または既存のファイルのID。
+        """
+        try:
+            # フォルダ内で同名ファイルを検索
+            query = f"name='{file_name}' and '{folder_id}' in parents and trashed=false"
+            results = self.drive_service.files().list(
+                q=query, spaces="drive", fields="files(id, name)", pageSize=1
+            ).execute()
+            existing_files = results.get("files", [])
+            
+            if existing_files:
+                # 同名ファイルが存在する場合はスキップ
+                file_id = existing_files[0]["id"]
+                logger.info(f"同名ファイルが既に存在するためスキップ: '{file_name}' (フォルダID: {folder_id}, ファイルID: {file_id})")
+                return file_id
+
+            # ファイルのメタデータを設定
+            file_metadata = {
+                "name": file_name,
+                "parents": [folder_id],
+            }
+
+            # ファイルをアップロード
+            media = MediaIoBaseUpload(BytesIO(file_content), mimetype=mime_type)
+            uploaded_file = self.drive_service.files().create(
+                body=file_metadata, media_body=media, fields="id"
+            ).execute()
+            file_id = uploaded_file.get("id")
+            logger.info(f"ファイルをアップロード: '{file_name}' (フォルダID: {folder_id}, ファイルID: {file_id})")
+            return file_id
+
+        except Exception as e:
+            logger.error(f"ファイルのアップロードに失敗しました: {e}")
+            raise
+
+================================================================================
+File: src\utils\environment.py
+================================================================================
+
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+from typing import Optional, Any
+import configparser
+
+class EnvironmentUtils:
+    """プロジェクト全体で使用する環境関連のユーティリティクラス"""
+
+    # プロジェクトルートのデフォルト値
+    BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+    @staticmethod
+    def set_project_root(path: Path) -> None:
+        """
+        プロジェクトのルートディレクトリを設定します。
+
+        Args:
+            path (Path): 新しいプロジェクトルート
+        """
+        EnvironmentUtils.BASE_DIR = path
+
+    @staticmethod
+    def get_project_root() -> Path:
+        """
+        プロジェクトのルートディレクトリを取得します。
+
+        Returns:
+            Path: プロジェクトのルートディレクトリ
+        """
+        return EnvironmentUtils.BASE_DIR
+
+    @staticmethod
+    def load_env(env_file: Optional[Path] = None) -> None:
+        """
+        環境変数を .env ファイルからロードします。
+
+        Args:
+            env_file (Optional[Path]): .env ファイルのパス
+        """
+        env_file = env_file or (EnvironmentUtils.BASE_DIR / "config" / "secrets.env")
+
+        if not env_file.exists():
+            raise FileNotFoundError(f"{env_file} が見つかりません。正しいパスを指定してください。")
+
+        load_dotenv(env_file)
+
+    @staticmethod
+    def get_env_var(key: str, default: Optional[Any] = None) -> Any:
+        """
+        環境変数を取得します。
+
+        Args:
+            key (str): 環境変数のキー
+            default (Optional[Any]): デフォルト値
+
+        Returns:
+            Any: 環境変数の値またはデフォルト値
+        """
+        return os.getenv(key, default)
+
+    @staticmethod
+    def get_config_file(file_name: str = "settings.ini") -> Path:
+        """
+        設定ファイルのパスを取得します。
+
+        Args:
+            file_name (str): 設定ファイル名
+
+        Returns:
+            Path: 設定ファイルのパス
+
+        Raises:
+            FileNotFoundError: 指定された設定ファイルが見つからない場合
+        """
+        config_path = EnvironmentUtils.BASE_DIR / "config" / file_name
+        if not config_path.exists():
+            raise FileNotFoundError(f"Configuration file not found: {config_path}")
+        return config_path
+
+    @staticmethod
+    def get_config_value(section: str, key: str, default: Optional[Any] = None) -> Any:
+        """
+        設定ファイルから指定のセクションとキーの値を取得します。
+
+        Args:
+            section (str): セクション名
+            key (str): キー名
+            default (Optional[Any]): デフォルト値
+
+        Returns:
+            Any: 設定値
+        """
+        config_path = EnvironmentUtils.get_config_file()
+        config = configparser.ConfigParser()
+        config.read(config_path)
+
+        if not config.has_section(section):
+            return default
+        if not config.has_option(section, key):
+            return default
+
+        value = config.get(section, key, fallback=default)
+
+        # 型変換
+        if value.isdigit():
+            return int(value)
+        if value.replace('.', '', 1).isdigit():
+            return float(value)
+        if value.lower() in ['true', 'false']:
+            return value.lower() == 'true'
+        return value
+
+    @staticmethod
+    def resolve_path(path: str) -> Path:
+        """
+        指定されたパスをプロジェクトルートに基づいて絶対パスに変換します。
+
+        Args:
+            path (str): 相対パスまたは絶対パス
+
+        Returns:
+            Path: 解決された絶対パス
+        """
+        resolved_path = Path(path)
+        if not resolved_path.is_absolute():
+            resolved_path = EnvironmentUtils.get_project_root() / resolved_path
+
+        if not resolved_path.exists():
+            raise FileNotFoundError(f"Resolved path does not exist: {resolved_path}")
+
+        return resolved_path
+
+    @staticmethod
+    def get_service_account_file() -> Path:
+        """
+        サービスアカウントファイルのパスを取得します。
+
+        Returns:
+            Path: サービスアカウントファイルの絶対パス
+
+        Raises:
+            FileNotFoundError: ファイルが存在しない場合
+        """
+        # 環境変数または設定ファイルから取得
+        service_account_file = EnvironmentUtils.get_env_var(
+            "SERVICE_ACCOUNT_FILE",
+            default=EnvironmentUtils.get_config_value("GOOGLE", "service_account_file", default="config/service_account.json")
+        )
+
+        # パスを解決
+        return EnvironmentUtils.resolve_path(service_account_file)
+
+    @staticmethod
+    def get_environment() -> str:
+        """
+        環境変数 APP_ENV を取得します。
+        デフォルト値は 'development' です。
+
+        Returns:
+            str: 現在の環境（例: 'development', 'production'）
+        """
+        return EnvironmentUtils.get_env_var("APP_ENV", "development")
+
+    @staticmethod
+    def get_openai_api_key():
+        """
+        Get the OpenAI API key from the environment variables.
+        """
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY が設定されていません。環境変数を確認してください。")
+        return api_key
+
+    @staticmethod
+    def get_openai_model():
+        """
+        Get the OpenAI model name from the environment variables.
+        Defaults to 'gpt-4o' if not explicitly set.
+        """
+        return os.getenv("OPENAI_MODEL", "gpt-4o")
+
+================================================================================
+File: src\utils\helpers.py
+================================================================================
+
+ 
+
+
+================================================================================
+File: src\utils\logging_config.py
+================================================================================
+
+import logging
+import logging.handlers
+from datetime import datetime
+from pathlib import Path
+from icecream import ic
+from typing import Optional
+
+class LoggingConfig:
+    _initialized = False
+
+    def __init__(self, use_icecream: bool = False):
+        """
+        ログ設定を初期化します。
+
+        Args:
+            use_icecream (bool): IceCreamデバッグを有効化するか
+        """
+        if LoggingConfig._initialized:
+            return  # 再初期化を防止
+
+        self.log_dir = Path("logs")
+        self.log_level = logging.INFO
+        self.log_format = "%(asctime)s - %(name)s - [%(levelname)s] - %(message)s"
+        self.use_icecream = use_icecream
+
+        self.setup_logging()
+        self.initialize_icecream()
+
+        LoggingConfig._initialized = True  # 初期化済みフラグを設定
+
+    def setup_logging(self) -> None:
+        """
+        ロギング設定をセットアップします。
+        """
+        if not self.log_dir.exists():
+            self.log_dir.mkdir(parents=True, exist_ok=True)
+
+        log_file = self.log_dir / f"app_{datetime.now().strftime('%Y%m%d')}.log"
+
+        handlers = [
+            logging.handlers.TimedRotatingFileHandler(
+                log_file, when="midnight", interval=1, backupCount=30, encoding="utf-8"
+            ),
+            logging.StreamHandler(),
+        ]
+
+        logging.basicConfig(
+            level=self.log_level,
+            format=self.log_format,
+            handlers=handlers,
+        )
+
+        logging.getLogger().info("Logging setup complete.")
+
+    def initialize_icecream(self) -> None:
+        """
+        IceCreamのデバッグ設定を初期化します。
+        """
+        if self.use_icecream:
+            ic.configureOutput(includeContext=True)
+            logging.getLogger().info("IceCream debugging enabled.")
+        else:
+            ic.disable()
+            logging.getLogger().info("IceCream debugging disabled.")
+
+def get_logger(name: Optional[str] = None, use_icecream: bool = False) -> logging.Logger:
+    """
+    名前付きロガーを取得します。
+
+    Args:
+        name (Optional[str]): ロガー名
+        use_icecream (bool): IceCreamデバッグを有効化するか
+
+    Returns:
+        logging.Logger: 名前付きロガー
+    """
+    LoggingConfig(use_icecream=use_icecream)
+    return logging.getLogger(name)
+
+
+================================================================================
+File: src\utils\spreadsheet.py
+================================================================================
+
+import os
+from pathlib import Path
+from configparser import ConfigParser
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from utils.environment import EnvironmentUtils as env
+from utils.logging_config import get_logger
+
+class SpreadsheetService:
+    """スプレッドシート操作を管理するクラス"""
+
+    def __init__(self):
+        """
+        初期化メソッド。
+        ログ設定とGoogle Sheets APIサービスの初期化を行います。
+        """
+        self.logger = get_logger(__name__)
+        self.logger.info("Initializing SpreadsheetService...")
+
+        # サービスアカウントファイルを取得
+        try:
+            # 環境変数または設定ファイルから取得
+            service_account_file = os.getenv("SERVICE_ACCOUNT_FILE", "config/service_account.json")
+            self.logger.info(f"Configured service account file: {service_account_file}")
+
+            # パスを解決
+            service_account_path = self._resolve_path(service_account_file)
+            self.logger.info(f"Resolved service account file path: {service_account_path}")
+
+            # Google 認証情報をロード
+            if not service_account_path.exists():
+                raise FileNotFoundError(f"Service account file not found: {service_account_path}")
+
+            self.credentials = Credentials.from_service_account_file(str(service_account_path))
+            self.logger.info("Service account file successfully loaded.")
+        except Exception as e:
+            self.logger.error(f"Failed to load service account file: {e}")
+            raise
+
+        # Google Sheets API サービスを初期化
+        try:
+            self.service = build("sheets", "v4", credentials=self.credentials)
+            self.logger.info("Google Sheets API service initialized successfully.")
+        except Exception as e:
+            self.logger.error(f"Failed to initialize Google Sheets API service: {e}")
+            raise
+
+        # ConfigParser で設定ファイルをロード
+        try:
+            config_path = env.get_config_file()
+            self.logger.info(f"Loading configuration from: {config_path}")
+            self.config = ConfigParser()
+
+            if not config_path.exists():
+                raise FileNotFoundError(f"Configuration file not found: {config_path}")
+
+            self.config.read(config_path)
+            self.logger.info(f"Configuration loaded successfully: {self.config.sections()}")
+        except Exception as e:
+            self.logger.error(f"Error loading configuration: {e}")
+            raise
+
+    def _resolve_path(self, path: str) -> Path:
+        """
+        与えられたパスを絶対パスに解決します。
+
+        :param path: 解決するパス
+        :return: 絶対パス
+        """
+        resolved_path = Path(path)
+        if not resolved_path.is_absolute():
+            resolved_path = env.get_project_root() / resolved_path
+
+        self.logger.debug(f"Resolved path: {resolved_path}")
+        return resolved_path
+
+    def get_sheet_data(self, spreadsheet_id: str, sheet_name: str):
+        """
+        指定されたスプレッドシートのデータを取得します。
+
+        Args:
+            spreadsheet_id (str): スプレッドシートID
+            sheet_name (str): シート名
+
+        Returns:
+            List[List[str]]: スプレッドシートのデータ
+        """
+        self.logger.info(f"Fetching data from Spreadsheet ID: {spreadsheet_id}, Sheet Name: {sheet_name}")
+        try:
+            sheet = self.service.spreadsheets()
+            result = sheet.values().get(spreadsheetId=spreadsheet_id, range=sheet_name).execute()
+            data = result.get("values", [])
+            self.logger.debug(f"Data fetched: {data}")
+            return data
+        except Exception as e:
+            self.logger.error(f"Error fetching data for Sheet '{sheet_name}': {e}")
+            raise
+
+    def get_spreadsheet_id(self, section: str, option: str) -> str:
+        """
+        スプレッドシートIDを取得します。
+
+        Args:
+            section (str): 設定ファイルのセクション名
+            option (str): 設定項目名
+
+        Returns:
+            str: スプレッドシートID
+        """
+        self.logger.info(f"Fetching Spreadsheet ID from section: {section}, option: {option}")
+        try:
+            if not self.config.has_section(section):
+                raise ValueError(f"Section '{section}' not found in the configuration.")
+            if not self.config.has_option(section, option):
+                raise ValueError(f"Option '{option}' not found in section '{section}'.")
+            spreadsheet_id = self.config.get(section, option)
+            self.logger.debug(f"Spreadsheet ID retrieved: {spreadsheet_id}")
+            return spreadsheet_id
+        except Exception as e:
+            self.logger.error(f"Error retrieving Spreadsheet ID: {e}")
+            raise
+
+    def append_sheet_data(self, spreadsheet_id: str, sheet_name: str, rows: list):
+        """
+        指定されたスプレッドシートのシートに行データを追加します。
+
+        Args:
+            spreadsheet_id (str): スプレッドシートID
+            sheet_name (str): シート名
+            rows (list): 追加する行データのリスト
+
+        Returns:
+            dict: APIのレスポンス
+        """
+        self.logger.info(f"Appending data to Spreadsheet ID: {spreadsheet_id}, Sheet Name: {sheet_name}")
+        try:
+            range_ = f"{sheet_name}!A1"
+            body = {"values": rows}
+
+            response = self.service.spreadsheets().values().append(
+                spreadsheetId=spreadsheet_id,
+                range=range_,
+                valueInputOption="RAW",
+                insertDataOption="INSERT_ROWS",
+                body=body
+            ).execute()
+
+            self.logger.info(f"Data appended successfully to Sheet: {sheet_name}, Response: {response}")
+            return response
+        except Exception as e:
+            self.logger.error(f"Error appending data to sheet '{sheet_name}': {e}")
+            raise
+
+
+================================================================================
+File: src\utils\xxxconfig.py
+================================================================================
+
+import os
+import configparser
+from pathlib import Path
+import logging
+from dotenv import load_dotenv
+from typing import Any, Dict, Optional, Union
+from icecream import ic
+
+class BaseConfig:
+    def __init__(self, env: str = 'development'):
+        self.env = env
+        self.logger = logging.getLogger(__name__)
+        self.base_path = Path(__file__).parent.parent.parent
+
+        # 環境変数と設定ファイルをロード
+        self._load_env()
+        self.config = self._load_config()
+        self._settings: Dict[str, Any] = {}
+        self._initialize_settings()
+
+    def _load_env(self):
+        """環境変数ファイルの読み込み"""
+        env_path = self.base_path / 'config' / 'secrets.env'
+        ic(f"Looking for env file at: {env_path}")
+
+        if env_path.exists():
+            load_dotenv(env_path)
+            ic("Loaded secrets.env file from config directory")
+        else:
+            ic("secrets.env file not found in config directory")
+            raise FileNotFoundError(f"{env_path} が見つかりません。環境変数を正しく設定してください。")
+
+    def _load_config(self):
+        """設定ファイルの読み込み"""
+        config = configparser.ConfigParser()
+        config_path = self.base_path / 'config' / 'settings.ini'
+        ic(f"Config path resolved: {config_path}")
+
+        if not config_path.exists():
+            raise FileNotFoundError(f"Config file not found: {config_path}")
+
+        try:
+            with open(config_path, 'r', encoding='utf-8-sig') as f:
+                config.read_file(f)
+            ic(f"Loaded configuration from: {config_path} (UTF-8)")
+        except UnicodeDecodeError:
+            try:
+                with open(config_path, 'r', encoding='cp932') as f:
+                    config.read_file(f)
+                ic(f"Loaded configuration using fallback encoding: {config_path} (Shift-JIS)")
+            except Exception as e:
+                ic(f"Failed to load configuration file: {e}")
+                raise
+
+        return config
+
+    def get_service_account_file(self) -> Path:
+        """
+        環境変数 'SERVICE_ACCOUNT_FILE' を取得し、フルパスを返します。
+
+        Returns:
+            Path: サービスアカウントファイルのパス
+        """
+        service_account_file = os.getenv("SERVICE_ACCOUNT_FILE")
+        if not service_account_file:
+            raise ValueError("環境変数 'SERVICE_ACCOUNT_FILE' が設定されていません。")
+
+        service_account_path = self.base_path / "config" / service_account_file
+        if not service_account_path.exists():
+            raise FileNotFoundError(f"サービスアカウントファイルが見つかりません: {service_account_path}")
+
+        ic(f"Resolved service account file path: {service_account_path}")
+        return service_account_path
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """環境変数または設定値を取得します。"""
+        value = os.getenv(key, self._settings.get(key, default))
+        ic(f"Retrieved value for {key}: {value}")
+        return value
+
+class ServiceConfig(BaseConfig):
+    """特定のサービス用設定クラス"""
+
+    def __init__(self, service_name: str, env: str = 'development'):
+        self.service_name = service_name.upper()
+        ic(f"Initializing ServiceConfig for {self.service_name}")
+        super().__init__(env=env)
+
+    def _initialize_settings(self):
+        """サービス固有の設定を初期化"""
+        try:
+            config_section = self.config[self.service_name]
+            self._settings = self._parse_config_section(config_section)
+            ic(f"{self.service_name} settings loaded: {self._settings}")
+        except KeyError as e:
+            ic(f"Missing section in configuration: {e}")
+            raise
+
+    def _parse_config_section(self, config_section: configparser.SectionProxy) -> Dict[str, Any]:
+        """設定セクションをパースして適切な型に変換"""
+        settings = {}
+        for key, value in config_section.items():
+            ic(f"Parsing key: {key}, value: {value}")
+            # カンマ区切りの文字列をリストとして解釈
+            if ',' in value:
+                settings[key] = [v.strip() for v in value.split(',')]
+                continue
+
+            # 数値への変換を試行
+            try:
+                if value.isdigit():
+                    settings[key] = int(value)
+                elif value.replace('.', '', 1).isdigit():
+                    settings[key] = float(value)
+                else:
+                    settings[key] = value
+            except ValueError:
+                settings[key] = value
+
+        return settings
+
+
+================================================================================
+File: tests\__init__.py
+================================================================================
+
+ 
+
+
+================================================================================
+File: tests\test_drive_file.py
+================================================================================
+
+import sys
+from pathlib import Path
+
+# プロジェクトのルートディレクトリを計算してPythonパスに追加
+project_root = Path(__file__).resolve().parent.parent
+sys.path.append(str(project_root))
+sys.path.append(str(project_root / "src"))  # srcディレクトリも追加
+
+# modules配下のpdf_mainからインポート
+from modules.pdfSummary.pdf_main import test_process_drive_file
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Test processing a Google Drive PDF file by its file ID.")
+    parser.add_argument("file_id", help="The Google Drive file ID of the PDF to process.")
+    parser.add_argument("drive_folder_id", help="The Google Drive folder ID to save the summary.")
+    args = parser.parse_args()
+
+    try:
+        test_process_drive_file(args.file_id, args.drive_folder_id)
+    except Exception as e:
+        print(f"エラーが発生しました: {e}")
+
+================================================================================
+File: tests\test_log.py
+================================================================================
+
+import logging
+from logging.handlers import TimedRotatingFileHandler
+from pathlib import Path
+from datetime import datetime
+
+def test_logging():
+    log_dir = Path("logs")
+    log_dir.mkdir(exist_ok=True)
+    log_file = log_dir / f"app_{datetime.now().strftime('%Y%m%d')}.log"
+
+    logger = logging.getLogger("test_logger")
+    logger.setLevel(logging.DEBUG)
+
+    handler = TimedRotatingFileHandler(
+        log_file,
+        when='midnight',
+        interval=1,
+        backupCount=30,
+        encoding='utf-8'
+    )
+
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+    logger.info("This is a test log message.")
+
+if __name__ == "__main__":
+    test_logging()
+
+
+================================================================================
+File: tests\test_slack_notify.py
+================================================================================
+
+import sys
+from pathlib import Path
+
+# プロジェクトのルートディレクトリを計算して Python パスに追加
+project_root = Path(__file__).resolve().parent.parent
+sys.path.append(str(project_root))
+sys.path.append(str(project_root / "src"))  # src ディレクトリも追加
+
+from modules.slack.slack_notify import test_slack_notification_with_file
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Test sending a Slack notification with a file link.")
+    parser.add_argument("slack_channel", help="The Slack channel to send the notification.")
+    parser.add_argument("message", help="The message to send to the Slack channel.")
+    parser.add_argument("file_id", help="The Google Drive file ID to share.")
+    parser.add_argument("--env_path", default="config/secrets.env", help="Path to the .env file (default: config/secrets.env).")
+    args = parser.parse_args()
+
+    try:
+        test_slack_notification_with_file(args.slack_channel, args.message, args.file_id, args.env_path)
+    except Exception as e:
+        print(f"エラーが発生しました: {e}")
+
+
+================================================================================
+File: tests\test_slack_notify_with_file.py
+================================================================================
+
+import sys
+from pathlib import Path
+
+# プロジェクトのルートディレクトリを計算して Python パスに追加
+project_root = Path(__file__).resolve().parent.parent
+sys.path.append(str(project_root))
+sys.path.append(str(project_root / "src"))  # src ディレクトリも追加
+
+from modules.slack.slack_notify import SlackNotifier
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Test sending a Slack notification with file content.")
+    parser.add_argument("slack_channel", help="The Slack channel to send the notification.")
+    parser.add_argument("file_id", help="The Google Drive file ID to read content from.")
+    parser.add_argument("--service_account_file", default="config/service_account.json", help="Path to the service account JSON file.")
+    args = parser.parse_args()
+
+    try:
+        notifier = SlackNotifier()
+        notifier.notify_with_file_content(args.slack_channel, args.file_id, args.service_account_file)
+    except Exception as e:
+        print(f"エラーが発生しました: {e}")
+
+
+================================================================================
+File: tests\test_spreadsheet.py
+================================================================================
+
+import sys
+from pathlib import Path
+
+# プロジェクトのルートディレクトリをパスに追加
+project_root = Path(__file__).resolve().parent.parent  # ir_news_release ディレクトリ
+sys.path.append(str(project_root / "src"))
+
+from utils.spreadsheet import SpreadsheetService
+from icecream import ic
+
+# 設定ファイルのパス
+CONFIG_PATH = Path("config/settings.ini")
+
+def test_list_sheet_headers():
+    """list シートのヘッダ行を取得して確認"""
+    service = SpreadsheetService(CONFIG_PATH)
+    data = service.get_sheet_data("list")
+
+    if data:
+        ic(data[0])  # 最初の行を出力（ヘッダ行）
+    else:
+        print("No data found in 'list' sheet.")
+
+if __name__ == "__main__":
+    test_list_sheet_headers()
+
+
+================================================================================
+File: tests\test_template.py
+================================================================================
+
+import sys
+from pathlib import Path
+import os
+from icecream import ic
+from configparser import ConfigParser
+
+# プロジェクトのルートディレクトリを計算し、`src` を `sys.path` に追加
+project_root = Path(__file__).resolve().parent.parent  # ir_news_release ディレクトリ
+src_path = project_root / "src"  # src ディレクトリ
+sys.path.insert(0, str(src_path))  # sys.path の先頭に追加
+
+from utils.logging_config import get_logger
+
+# 設定ファイルのパス
+CONFIG_PATH = project_root / "config/settings.ini"
+ENV_PATH = project_root / "config/secrets.env"
+
+def load_environment_variables(env_path):
+    """
+    secrets.env ファイルから環境変数を読み込む
+    """
+    if not env_path.exists():
+        raise FileNotFoundError(f"Environment file not found: {env_path}")
+    
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):  # 空行やコメントをスキップ
+                continue
+            key, value = line.split("=", 1)
+            os.environ[key] = value
+    ic(f"Environment variables loaded from {env_path}")
+
+def sample_function():
+    """
+    サンプル関数：Hello TOMONOKAI を出力し、ログとデバッグ出力を行う
+    """
+    # ロガー初期化
+    logger = get_logger()
+    logger.info("Starting sample function")
+
+    # 設定ファイルの読み込み
+    config = ConfigParser()
+    if CONFIG_PATH.exists():
+        config.read(CONFIG_PATH)
+        ic(f"Configuration loaded: {CONFIG_PATH}")
+    else:
+        logger.error(f"Configuration file not found: {CONFIG_PATH}")
+
+    # secrets.env の読み込み
+    try:
+        load_environment_variables(ENV_PATH)
+        logger.info(f"Environment variables loaded successfully from {ENV_PATH}")
+    except FileNotFoundError as e:
+        logger.error(str(e))
+        return
+
+    # サンプル出力
+    api_key = os.getenv("EDINET_API_KEY", "未設定")
+    logger.info(f"EDINET_API_KEY: {api_key}")
+    ic(f"EDINET_API_KEY: {api_key}")
+
+    print("Hello TOMONOKAI")
+    logger.info("Sample function completed successfully.")
+
+if __name__ == "__main__":
+    sample_function()
+

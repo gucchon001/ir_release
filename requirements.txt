@@ -1,0 +1,17 @@
+# Required packages
+openai==1.55.0
+pandas
+python-json-logger
+python-dotenv
+pytest
+icecream
+requests==2.31.0
+python-dotenv==1.0.0
+google-api-python-client==2.108.0
+google-auth-httplib2==0.1.1
+google-auth-oauthlib==1.1.0
+anytree
+tiktoken
+pymupdf
+sentence_transformers
+slack_sdk
