@@ -28,12 +28,14 @@ var/
 json/*.json
 settings.ini
 .env
+config/*.env
+config/*.json
 
 # Ensure the parent directory (json/) itself is tracked
-!json/
+!config/
 
 # Include JSON files starting with "prompt"
-!json/prompt*.json
+!config/prompt*.json
 
 # IDE
 .idea/
