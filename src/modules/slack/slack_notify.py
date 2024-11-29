@@ -1,3 +1,4 @@
+#slack_notify.py
 from pathlib import Path
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
@@ -5,6 +6,8 @@ from googleapiclient.errors import HttpError
 from utils.logging_config import get_logger
 from .drive_handler import DriveHandler
 import os
+
+from .markdown_formatter import MarkdownSlackFormatter
 
 logger = get_logger(__name__)
 
@@ -98,6 +101,21 @@ class SlackNotifier:
             logger.info(f"Slack ファイルリンクの送信に成功しました: {response['message']['text']}")
         except SlackApiError as e:
             logger.error(f"Slack ファイルリンク送信エラー: {e.response['error']}")
+            raise
+    def send_formatted_markdown(self, channel: str, markdown_content: str):
+        try:
+            formatter = MarkdownSlackFormatter()
+            message_data = formatter.format_content(markdown_content)
+            
+            # textパラメータを削除し、message_dataから取得
+            response = self.client.chat_postMessage(
+                channel=channel,
+                icon_emoji=":chart_with_upwards_trend:",
+                **message_data
+            )
+            logger.info(f"フォーマット済みコンテンツを送信しました: {response['ts']}")
+        except Exception as e:
+            logger.error(f"Markdownフォーマット送信中にエラーが発生しました: {e}")
             raise
 
 def test_slack_notification_with_file(slack_channel: str, message: str, file_id: str, env_path: str = "config/secrets.env"):
