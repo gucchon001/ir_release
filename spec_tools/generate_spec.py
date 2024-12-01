@@ -7,7 +7,6 @@ from utils import read_file_safely, write_file_content
 from icecream import ic  # Icecream デバッグ用
 from dotenv import load_dotenv  # dotenvを使用
 from pathlib import Path
-import subprocess
 from datetime import datetime
 
 # ロガーの設定
@@ -99,7 +98,7 @@ class SpecificationGenerator:
         """プロンプトファイル (prompt_requirements_spec.txt) を読み込む"""
         ic(self.prompt_file)  # デバッグ: プロンプトファイルのパスを確認
         try:
-            with open(self.prompt_file, 'r', encoding='utf-8') as f:  # Shift-JISで読み取り
+            with open(self.prompt_file, 'r', encoding='utf-8') as f:
                 content = f.read()
                 logger.info("prompt_requirements_spec.txt の読み込みに成功しました。")
                 return content
@@ -129,24 +128,29 @@ class SpecificationGenerator:
             return ""
 
     def get_project_tree(self) -> str:
-        """プロジェクトのフォルダ構成をツリー形式で取得"""
+        """プロジェクトのフォルダ構成をツリー形式で取得（Pythonで実装）"""
         try:
             logger.info("プロジェクトのフォルダ構成を取得中...")
-            # 'tree' コマンドを使用してフォルダ構成を取得
-            # Windows環境を想定しています。必要に応じてUnix系に変更してください。
-            result = subprocess.run(['tree', '/F'], capture_output=True, text=True, check=True)
-            project_tree = result.stdout
+            tree_lines = []
+            prefix = ""
+
+            def walk_dir(current_path: Path, prefix: str):
+                entries = sorted(current_path.iterdir(), key=lambda e: (e.is_file(), e.name.lower()))
+                entries_count = len(entries)
+                for index, entry in enumerate(entries):
+                    connector = "└── " if index == entries_count - 1 else "├── "
+                    tree_lines.append(f"{prefix}{connector}{entry.name}")
+                    if entry.is_dir():
+                        extension = "    " if index == entries_count - 1 else "│   "
+                        walk_dir(entry, prefix + extension)
+
+            walk_dir(Path(self.source_dir), prefix)
+            project_tree = "\n".join(tree_lines)
             logger.debug(f"取得したフォルダ構成:\n{project_tree}")
             return project_tree
-        except FileNotFoundError:
-            logger.error("tree コマンドが見つかりません。Windows環境で実行してください。")
-            return "tree コマンドが利用できません。"
-        except subprocess.CalledProcessError as e:
+        except Exception as e:
             logger.error(f"フォルダ構成の取得中にエラーが発生しました: {e}")
             return "フォルダ構成の取得に失敗しました。"
-        except Exception as e:
-            logger.error(f"予期せぬエラーが発生しました: {e}")
-            return "フォルダ構成の取得中にエラーが発生しました。"
 
     def update_readme(self) -> None:
         """README.md を README_tmp.md のテンプレートを使用して更新する"""
@@ -170,7 +174,7 @@ class SpecificationGenerator:
                 spec_content = "[仕様書の内容が取得できませんでした。]"
             updated_content = template_content.replace("[spec]", spec_content)
 
-            # [tree] プレースホルダーを merge.txt の内容からツリー図を取得して置換
+            # [tree] プレースホルダーを merge.txt の # Merged Python Files までの内容で置換
             merge_path = os.path.join(self.document_dir, 'merge.txt')
             merge_content = read_file_safely(merge_path)
             if not merge_content:
@@ -185,6 +189,10 @@ class SpecificationGenerator:
                     tree_section = merge_content  # マーカーがなければ全体を使用
                 tree_content = tree_section.strip()
             updated_content = updated_content.replace("[tree]", f"```\n{tree_content}\n```")
+
+            # 現在の日付を挿入（オプション）
+            current_date = datetime.now().strftime("%Y-%m-%d")
+            updated_content = updated_content.replace("[YYYY-MM-DD]", current_date)
 
             # README.md に書き込む
             if write_file_content(readme_path, updated_content):
