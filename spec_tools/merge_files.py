@@ -1,3 +1,4 @@
+#merge_files.py
 from anytree import Node, RenderTree
 import os
 from typing import Optional
@@ -37,7 +38,7 @@ class PythonFileMerger:
                 os.makedirs(self.output_dir)
 
             # 除外ディレクトリとファイルパターン
-            self.exclude_dirs = ['env', 'myenv', '__pycache__', 'spec_tools', 'logs', 'log']
+            self.exclude_dirs = ['env', 'myenv', '__pycache__', 'spec_tools', 'logs', 'log', '.git', 'downloads', 'data']
             self.exclude_files = ['*.log']
             ic(self.exclude_dirs)
             ic(self.exclude_files)

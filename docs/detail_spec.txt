@@ -1,56 +1,269 @@
 # プログラム仕様書
 
-## 1. フォルダ構造とファイルの種類
+---
+
+## 1. フォルダ構造の解析
+
+以下はプロジェクトのフォルダ構造です。
 
 ```
 ir_news_release/
-│
-├── .gitignore (その他)
-├── .req_hash (その他)
-├── README.md (その他)
-│
-├── config/ 
-│   ├── boxwood-dynamo-384411-6dec80faabfc.json (設定ファイル)
-│   ├── secrets.env (設定ファイル)
-│   └── settings.ini (設定ファイル)
-│
-├── data/ 
-│   └── E05028_S100UMLY.pdf (その他)
-│
-├── docs/ 
-│   ├── .gitkeep (その他)
-│   ├── detail_spec.txt (その他)
-│   ├── merge.txt (その他)
-│   └── requirements_spec.txt (その他)
-│
-├── requirements.txt (その他)
-├── run.bat (その他)
-├── spec_tools_run.bat (その他)
-│
-├── src/ 
-│   ├── __init__.py (Pythonコード)
-│   ├── main.py (Pythonコード)
+├── .git/
+│   ├── config
+│   ├── description
+│   ├── filter-repo/
+│   ├── hooks/
+│   ├── info/
+│   ├── objects/
+│   ├── refs/
+├── .gitignore
+├── .pytest_cache/
+├── .req_hash
+├── README.md
+├── config/
+│   ├── boxwood-dynamo-384411-6dec80faabfc.json
+│   ├── prompt_financial_report.json
+│   ├── secrets.env
+│   └── settings.ini
+├── data/
+├── docs/
+│   ├── detail_spec.txt
+│   ├── generate_detailed_spec.txt
+│   ├── merge.txt
+│   ├── requirements_spec.txt
+├── downloads/
+├── requirements.txt
+├── run.bat
+├── spec_tools_run.bat
+├── src/
+│   ├── __init__.py
+│   ├── main.py
 │   ├── modules/
-│   │   ├── __init__.py (Pythonコード)
+│   │   ├── __init__.py
 │   │   ├── edinet/
-│   │   │   ├── config.py (Pythonコード)
-│   │   │   └── operations.py (Pythonコード)
-│   │   └── module1.py (Pythonコード)
+│   │   ├── pdfSummary/
+│   │   ├── slack/
+│   │   └── spreadsheet_to_edinet.py
 │   └── utils/
-│       ├── __init__.py (Pythonコード)
-│       ├── config.py (Pythonコード)
-│       ├── helpers.py (Pythonコード)
-│       └── logging_config.py (Pythonコード)
-│
+│       ├── __init__.py
+│       ├── date_utils.py
+│       ├── drive_handler.py
+│       ├── environment.py
+│       ├── logging_config.py
+│       └── spreadsheet.py
 └── tests/
-    ├── __init__.py (Pythonコード)
-    ├── test_log.py (Pythonコード)
-    └── test_spreadsheet.py (Pythonコード)
 ```
 
-フォルダ数：8
-ファイル数：23 (Pythonコード：13, 設定ファイル：3, その他：7)
+### 追加情報
+1. **ファイルの種類**
+   - Pythonコード: `.py`
+   - 設定ファイル: `.json`, `.ini`, `.env`
+   - その他: `.md`, `.bat`, `.txt`, `.pdf`
+2. **ファイル数とフォルダ数の集計**
+   - フォルダ数: 7
+   - ファイル数: 63
+
+---
 
 ## 2. ファイルごとの役割と依存関係
 
-| ファイル名               | 役割                                                                
+| ファイル名                            | 役割                                                                                             | 依存関係                                                                                  |
+|--------------------------------------|--------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------|
+| `src/main.py`                        | エントリーポイント。処理フローを制御。                                                           | `modules.edinet.operations`, `modules.edinet.config`, `utils.spreadsheet`, `utils.environment`, `utils.date_utils`, `utils.logging_config` |
+| `src/modules/edinet/config.py`       | EDINET APIの設定情報を管理。                                                                      | `utils.environment`, `utils.logging_config`                                               |
+| `src/modules/edinet/operations.py`   | EDINET APIを操作し、ドキュメントを取得。                                                          | `utils.environment`, `utils.logging_config`, `requests`, `googleapiclient.discovery`      |
+| `src/modules/pdfSummary/extractor.py`| PDFからテキストを抽出する。                                                                      | `utils.logging_config`                                                                    |
+| `src/modules/pdfSummary/pdf_main.py` | PDFを処理して要約を作成し、Google Driveに保存。                                                   | `utils.environment`, `utils.drive_handler`, `utils.logging_config`, `extractor`, `tokenizer`, `summarizer` |
+| `src/modules/slack/slack_notify.py`  | Slackに通知を送信。                                                                              | `utils.logging_config`, `slack_sdk`                                                       |
+| `src/utils/date_utils.py`            | 日付解析を行うユーティリティ。                                                                    | なし                                                                                       |
+| `src/utils/drive_handler.py`         | Google Driveとのファイル操作を管理。                                                              | `googleapiclient.discovery`, `google.oauth2.service_account`, `utils.logging_config`      |
+| `src/utils/environment.py`           | 環境変数や設定ファイルの管理を行うユーティリティ。                                                | `dotenv`, `configparser`                                                                  |
+| `src/utils/logging_config.py`        | ロギングの設定と初期化を行う。                                                                    | `icecream`                                                                                |
+| `src/utils/spreadsheet.py`           | Googleスプレッドシートの操作を管理。                                                              | `googleapiclient.discovery`, `google.oauth2.service_account`, `utils.environment`, `utils.logging_config` |
+
+---
+
+## 3. 各ファイル内の関数リスト
+
+### ファイル名: `main.py`
+- `initialize_debug_tools`: デバッグツールを初期化。
+- `run_process`: 汎用プロセス実行関数。
+- `edinet_process`: EDINET APIを使用して指定された期間内のドキュメントを取得。
+- `main`: メイン処理。
+
+### ファイル名: `modules/edinet/config.py`
+- `_load_env`: 環境変数をロードする。
+- `_load_settings`: 設定をEnvironmentUtilsを利用して読み込む。
+- `_validate_settings`: 設定値の検証。
+- `_resolve_path`: 指定されたパスをプロジェクトルートに基づいて解決する。
+- `base_url`: EDINET APIのベースURLを取得。
+- `api_key`: EDINET APIキーを取得。
+- `parent_folder_id`: Google Driveの親フォルダIDを取得。
+- `service_account_file`: サービスアカウントファイルのパスを取得。
+- `get_download_dir`: ダウンロードディレクトリのパスを取得。
+
+### ファイル名: `modules/edinet/operations.py`
+- `initialize_drive_service`: Google Drive APIサービスの初期化。
+- `get_documents_for_date_range`: 指定期間のEDINET文書を取得。
+- `fetch_documents_for_date`: 指定日のEDINET文書を取得。
+- `fetch_document_data`: EDINET APIからPDFデータを取得。
+
+### ファイル名: `modules/pdfSummary/extractor.py`
+- `extract_text_from_pdf`: PyMuPDFを使用してPDFからテキストを抽出。
+
+### ファイル名: `modules/pdfSummary/pdf_main.py`
+- `load_prompt`: プロンプトファイルをロードする。
+- `process_pdf`: PDFを処理して要約を作成し、Google Driveに保存。
+- `test_process_drive_file`: Google DriveのPDFファイルを処理するテスト関数。
+
+### ファイル名: `modules/slack/slack_notify.py`
+- `format_content`: MarkdownコンテンツをSlackのBlock Kit形式にフォーマット。
+- `send_formatted_markdown`: フォーマットされたMarkdownをSlackに送信。
+
+### ファイル名: `utils/date_utils.py`
+- `parse_date_string`: 日付文字列を解析してdatetimeオブジェクトを返す。
+
+### ファイル名: `utils/drive_handler.py`
+- `get_file_content`: 指定されたGoogle Driveファイルの内容を取得。
+- `save_summary_to_drive`: 要約をGoogle Driveに保存。
+- `download_pdf_from_drive`: Google DriveからPDFファイルをダウンロード。
+- `get_or_create_folder`: 指定された名前のフォルダを取得または作成。
+- `upload_file`: ファイルをGoogle Driveにアップロード。
+
+### ファイル名: `utils/environment.py`
+- `set_project_root`: プロジェクトのルートディレクトリを設定。
+- `get_project_root`: プロジェクトのルートディレクトリを取得。
+- `load_env`: 環境変数を.envファイルからロード。
+- `get_env_var`: 環境変数を取得。
+- `get_config_file`: 設定ファイルのパスを取得。
+- `get_config_value`: 設定ファイルから指定のセクションとキーの値を取得。
+- `resolve_path`: 指定されたパスをプロジェクトルートに基づいて絶対パスに変換。
+- `get_service_account_file`: サービスアカウントファイルのパスを取得。
+- `get_environment`: 環境変数APP_ENVを取得。
+- `get_openai_api_key`: OpenAI APIキーを取得。
+- `get_openai_model`: OpenAIモデル名を取得。
+
+### ファイル名: `utils/logging_config.py`
+- `setup_logging`: ロギング設定をセットアップ。
+- `initialize_icecream`: IceCreamのデバッグ設定を初期化。
+
+### ファイル名: `utils/spreadsheet.py`
+- `get_sheet_data`: 指定されたスプレッドシートのデータを取得。
+- `get_spreadsheet_id`: スプレッドシートIDを取得。
+- `append_sheet_data`: 指定されたスプレッドシートのシートに行データを追加。
+
+---
+
+## 4. 関数ごとの詳細仕様
+
+### 関数名: `initialize_debug_tools`
+- **概要**: デバッグツールを初期化。
+- **入力**: なし
+- **出力**: なし
+- **内部処理**:
+  - 環境設定からIceCreamの使用設定を取得。
+  - IceCreamの設定を反映。
+- **依存関係**:
+  - 環境設定: `utils.environment`
+  - ロギング: `utils.logging_config`
+
+### 関数名: `run_process`
+- **概要**: 汎用プロセス実行関数。
+- **入力**:
+  - `process_func` (Callable): 実行する関数。
+  - `config` (Optional[Any]): 設定データ。
+- **出力**: なし
+- **内部処理**:
+  - ログにプロセス開始を記録。
+  - 指定された関数を実行。
+  - 実行後にログに成功を記録。
+  - 例外発生時にはログにエラーを記録し、例外を送出。
+- **依存関係**:
+  - ロギング: `utils.logging_config`
+
+### 関数名: `edinet_process`
+- **概要**: EDINET APIを使用して指定された期間内のドキュメントを取得。
+- **入力**:
+  - `config` (EDINETConfig): EDINETの設定。
+- **出力**: なし
+- **内部処理**:
+  - EDINETOperationsインスタンスを作成。
+  - 設定から日付範囲を取得。
+  - スプレッドシートからEDINETコードを取得。
+  - ドキュメントを取得し、ログに記録。
+- **依存関係**:
+  - 環境設定: `utils.environment`
+  - スプレッドシート: `utils.spreadsheet`
+  - ロギング: `utils.logging_config`
+
+### 関数名: `extract_text_from_pdf`
+- **概要**: PyMuPDFを使用してPDFからテキストを抽出。
+- **入力**:
+  - `pdf_path` (str): PDFファイルのパス。
+- **出力**: str
+- **内部処理**:
+  - PDFを開き、各ページからテキストを抽出。
+  - 抽出したテキストを返す。
+- **依存関係**:
+  - ロギング: `utils.logging_config`
+
+---
+
+## 5. データフローとモジュール相互作用
+
+- **入力元**: 
+  - `main.py`が`config.py`から設定情報を取得。
+  - `operations.py`でEDINET APIからデータを取得し、ローカルに保存。
+  - 保存されたファイルをGoogle Driveにアップロード。
+
+- **処理順序**: 
+  1. `main.py`で環境変数と設定ファイルをロード。
+  2. `edinet_process`関数でEDINET APIからドキュメントを取得。
+  3. `pdf_main.py`でPDFを処理し、要約を作成。
+  4. `drive_handler.py`で要約をGoogle Driveに保存。
+  5. `slack_notify.py`で要約をSlackに通知。
+
+- **出力先**: 
+  - 処理結果はGoogle Driveに保存され、Slackに通知される。
+
+---
+
+## 6. 非機能要件と技術要件
+
+### **非機能要件**
+- **パフォーマンス要件**: 各ドキュメントの処理時間を1分以内に抑える。
+- **セキュリティ要件**: APIキーや認証情報は環境変数で管理し、コード内に含めない。
+- **スケーラビリティ**: 並列処理を使用して複数ドキュメントを同時に処理可能。
+
+### **技術要件**
+- **Pythonバージョン**: 3.8以降
+- **必要な外部ライブラリ**:
+  - `requests`: APIへのHTTPリクエスト。
+  - `google-api-python-client`: Google Drive API操作。
+  - `slack-sdk`: Slack通知。
+  - `pymupdf`: PDFテキスト抽出。
+  - `openai`: OpenAI API接続。
+
+---
+
+## 7. 使用手順と注意事項
+
+### セットアップ
+1. 必要なライブラリをインストール:
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. 環境変数を設定:
+   ```bash
+   export EDINET_API_KEY=<your_api_key>
+   ```
+
+### 実行方法
+- 実行コマンド:
+  ```bash
+  python main.py
+  ```
+
+### 注意事項
+- **エラーハンドリング**: すべての例外はログに記録され、適切に処理される。
+- **ログ管理**: ログファイルは`logs/`ディレクトリに保存され、日次でローテーションされる。

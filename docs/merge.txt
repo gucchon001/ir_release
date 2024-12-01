@@ -1,69 +1,4 @@
 ir_news_release
-├── .git
-│   ├── COMMIT_EDITMSG
-│   ├── HEAD
-│   ├── ORIG_HEAD
-│   ├── config
-│   ├── description
-│   ├── filter-repo
-│   │   ├── already_ran
-│   │   ├── commit-map
-│   │   ├── ref-map
-│   │   └── suboptimal-issues
-│   ├── hooks
-│   │   ├── applypatch-msg.sample
-│   │   ├── commit-msg.sample
-│   │   ├── fsmonitor-watchman.sample
-│   │   ├── post-update.sample
-│   │   ├── pre-applypatch.sample
-│   │   ├── pre-commit.sample
-│   │   ├── pre-merge-commit.sample
-│   │   ├── pre-push.sample
-│   │   ├── pre-rebase.sample
-│   │   ├── pre-receive.sample
-│   │   ├── prepare-commit-msg.sample
-│   │   ├── push-to-checkout.sample
-│   │   ├── sendemail-validate.sample
-│   │   └── update.sample
-│   ├── index
-│   ├── info
-│   │   ├── exclude
-│   │   └── refs
-│   ├── objects
-│   │   ├── 09
-│   │   │   └── 0184f6d22d72dfebb7b454c831569dbf0155a7
-│   │   ├── 48
-│   │   │   ├── 4f3b21de0578c7b0f130a33de53a57e268d06a
-│   │   │   └── dd36720d244adc007874dae4cbec308de10f67
-│   │   ├── 49
-│   │   │   └── cdc58be1e3e8eea559aed5132dab78a0f32d4c
-│   │   ├── 60
-│   │   │   └── f1bfdab3b0dd0d57e10e6f01d8243792ea9490
-│   │   ├── 8e
-│   │   │   └── b1df26f943b8fb825ee3d72318b9eb613fcc67
-│   │   ├── b3
-│   │   │   └── bb5e09eac8586f81496f46beb530729029a22d
-│   │   ├── dd
-│   │   │   └── 21c955ac06c06ef703f6cc1bec543ea3bdc5df
-│   │   ├── fd
-│   │   │   └── 58769e24165bf30a1b21cf4b57428f1a741514
-│   │   ├── fe
-│   │   │   └── 4e6a44d95cd6320c6e4ec071578d3ba4d766be
-│   │   ├── info
-│   │   │   ├── commit-graph
-│   │   │   └── packs
-│   │   └── pack
-│   │       ├── pack-29123bf53d77ddfb231dec3da3ff6365fa7fae31.idx
-│   │       ├── pack-29123bf53d77ddfb231dec3da3ff6365fa7fae31.pack
-│   │       └── pack-29123bf53d77ddfb231dec3da3ff6365fa7fae31.rev
-│   ├── packed-refs
-│   └── refs
-│       ├── heads
-│       │   └── main
-│       ├── remotes
-│       │   └── origin
-│       │       └── main
-│       └── tags
 ├── .gitignore
 ├── .pytest_cache
 │   ├── .gitignore
@@ -81,34 +16,12 @@ ir_news_release
 │   ├── prompt_financial_report.json
 │   ├── secrets.env
 │   └── settings.ini
-├── data
-│   ├── E05024_S100UIEO.pdf
-│   ├── E05028_S100UMLK.pdf
-│   └── E05028_S100UMLY.pdf
 ├── docs
 │   ├── .gitkeep
 │   ├── detail_spec.txt
 │   ├── generate_detailed_spec.txt
 │   ├── merge.txt
 │   └── requirements_spec.txt
-├── downloads
-│   ├── E04796_S100UPBR_20241111.pdf
-│   ├── E04823_S100URPY_20241114.pdf
-│   ├── E04824_S100UPMY_20241113.pdf
-│   ├── E04941_S100UIVM_20241011.pdf
-│   ├── E04958_S100UISD_20241011.pdf
-│   ├── E04981_S100USJE_20241118.pdf
-│   ├── E04991_S100UR84_20241114.pdf
-│   ├── E05011_S100UOHD_20241111.pdf
-│   ├── E05024_S100UIEO_20241010.pdf
-│   ├── E05028_S100UMLK_20241106.pdf
-│   ├── E05030_S100UORB_20241114.pdf
-│   ├── E05067_S100UJ27_20241011.pdf
-│   ├── E05306_S100UPF2_20241113.pdf
-│   ├── E21514_S100UPZH_20241114.pdf
-│   ├── E37221_S100UPOF_20241112.pdf
-│   ├── test_document.md
-│   └── test_document.pdf
 ├── requirements.txt
 ├── run.bat
 ├── spec_tools_run.bat
@@ -130,11 +43,11 @@ ir_news_release
 │   │   │   └── tokenizer.py
 │   │   ├── setup.py
 │   │   ├── slack
-│   │   │   ├── markdown_formatter.py
 │   │   │   └── slack_notify.py
 │   │   └── spreadsheet_to_edinet.py
 │   └── utils
 │       ├── __init__.py
+│       ├── date_utils.py
 │       ├── drive_handler.py
 │       ├── environment.py
 │       ├── logging_config.py
@@ -166,13 +79,14 @@ File: src\main.py
 
 #main.py
 from typing import Callable, Optional, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from modules.edinet.operations import EDINETOperations
 from modules.edinet.config import EDINETConfig
 from modules.spreadsheet_to_edinet import process_spreadsheet_data
 from utils.spreadsheet import SpreadsheetService
 from utils.environment import EnvironmentUtils as env
+from utils.date_utils import parse_date_string
 from utils.logging_config import get_logger
 
 # 名前付きロガーを取得
@@ -217,8 +131,10 @@ def edinet_process(config: EDINETConfig) -> None:
     if not start_date_str or not end_date_str:
         raise ValueError("DATE_RANGE section or required keys are missing in the settings.ini file.")
 
-    start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
-    end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
+    # 動的な日付解析
+    start_date = parse_date_string(start_date_str)
+    end_date = parse_date_string(end_date_str)
+    
     logger.debug(f"Fetching documents from {start_date} to {end_date}")
 
     spreadsheet_service = SpreadsheetService()
@@ -1038,68 +954,184 @@ setup(
 )
 
 ================================================================================
-File: src\modules\slack\markdown_formatter.py
+File: src\modules\slack\slack_notify.py
 ================================================================================
 
-#markdown_formatter.py
-from typing import List, Dict
-import re
+# slack_notifier.py
+from pathlib import Path
+from slack_sdk import WebClient
+from slack_sdk.errors import SlackApiError
 from utils.logging_config import get_logger
+import os
+import re
+from typing import List, Dict, Optional
+from dotenv import load_dotenv
 
 logger = get_logger(__name__)
 
 class MarkdownSlackFormatter:
-    def format_content(self, markdown_content: str) -> Dict:
-        company_name = markdown_content.split('(')[1].split(')')[0]
-        sections = self._split_sections(markdown_content)
+    """
+    Markdownテキストを Slack の Block Kit 形式にフォーマットするクラス。
+    会社の決算情報を構造化された形式で表示し、インタラクティブな要素を提供します。
+    """
+    def format_content(self, markdown_content: str, ir_page_url: str) -> Dict:
+        """
+        Markdownコンテンツを Slack の Block Kit 形式に変換します。
+
+        Args:
+            markdown_content (str): 変換対象のMarkdownテキスト
+            ir_page_url (str): IR情報ページへのURL
+
+        Returns:
+            Dict: Block Kit形式のメッセージ構造
+        """
+        # 会社名を抽出
+        company_name = self._extract_company_name(markdown_content)
         
-        return {
-            "attachments": [
-                {
-                    "color": "#36a64f",
-                    "pretext": None,
-                    "mrkdwn_in": ["text", "fields", "title", "footer"],
-                    "title": f"*{company_name}* の決算情報",
-                    "text": self._format_summary(sections['header']),
-                    "fallback": f"{company_name}の決算情報",
-                    "fields": self._format_sections(sections['content']),
-                    "footer": "📑 情報取得元：金融庁 EDINET / GPT4oを使用して要約しています"
-                    # footer_iconを削除し、代わりに絵文字を使用
-                }
+        # コンテンツをセクションに分割
+        sections = self._split_sections(markdown_content)
+        blocks = []
+
+        # ヘッダーブロック（会社名）
+        blocks.append(self._create_header_block(company_name))
+
+        # 基本情報ブロック
+        if sections['header']:
+            blocks.append(self._create_section_block(
+                self._format_summary(sections['header'])
+            ))
+
+        # セクション区切り
+        blocks.append({"type": "divider"})
+
+        # 各セクションのブロック
+        for section in self._format_sections(sections['content']):
+            blocks.append(self._create_section_block(
+                f"*{section['title']}*\n{section['value']}"
+            ))
+
+        # フッター情報とボタン
+        blocks.extend(self._create_footer_blocks(ir_page_url))
+
+        return {"blocks": blocks}
+
+    def _extract_company_name(self, markdown_content: str) -> str:
+        """
+        Markdownコンテンツから会社名を抽出します。
+        前株式会社と後株式会社の両方のパターンに対応します。
+
+        Args:
+            markdown_content (str): 解析対象のMarkdownテキスト
+
+        Returns:
+            str: 抽出された会社名、見つからない場合は"不明な会社名"
+        """
+        try:
+            # パターン1: 会社名欄での検索
+            patterns = [
+                r'会社名:\s*\*\*(株式会社[^*]+)\*\*',  # 前株式会社パターン
+                r'会社名:\s*\*\*([^株]+株式会社)\*\*',  # 後株式会社パターン
+                r'決算短信の要約\s*\(\*\*(株式会社[^*]+)\*\*\)',  # タイトルでの前株式会社
+                r'決算短信の要約\s*\(\*\*([^株]+株式会社)\*\*\)'  # タイトルでの後株式会社
             ]
+            
+            for pattern in patterns:
+                match = re.search(pattern, markdown_content)
+                if match:
+                    return match.group(1)
+            
+            return "不明な会社名"
+            
+        except Exception as e:
+            logger.error(f"会社名の抽出中にエラーが発生しました: {str(e)}")
+            return "不明な会社名"
+
+    def _create_header_block(self, company_name: str) -> Dict:
+        """ヘッダーブロックを作成します"""
+        return {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f"{company_name}の決算情報",
+                "emoji": True
+            }
         }
 
+    def _create_section_block(self, text: str) -> Dict:
+        """セクションブロックを作成します"""
+        return {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": text
+            }
+        }
+
+    def _create_footer_blocks(self, ir_page_url: str) -> List[Dict]:
+        """フッター情報とボタンブロックを作成します"""
+        return [
+            {"type": "divider"},
+            {
+                "type": "context",
+                "elements": [{
+                    "type": "mrkdwn",
+                    "text": "📊 金融庁 EDINET / GPT4oを使用して要約しています"
+                }]
+            },
+            {
+                "type": "actions",
+                "elements": [{
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "📑 関連IR情報をもっと見る",
+                        "emoji": True
+                    },
+                    "style": "primary",
+                    "url": ir_page_url,
+                    "action_id": "view_ir_info"
+                }]
+            }
+        ]
+
     def _format_sections(self, content_sections: List[str]) -> List[Dict]:
+        """セクションの内容をフォーマットします"""
         fields = []
         for section in content_sections:
             matches = re.match(r'(\d+\.\s*)(.*)', section)
             if matches:
                 title = matches.group(2).strip()
                 content = '\n'.join(section.split('\n')[1:])
-                
                 fields.append({
                     "title": f"{self._get_section_icon(title)} {title}",
-                    "value": self._format_content(title, content),
+                    "value": self._format_content_text(content),
                     "short": False
                 })
         return fields
 
-    def _format_content(self, title: str, content: str) -> str:
-        formatted_lines = []
+    def _format_content_text(self, content: str) -> str:
+        """テキストコンテンツを整形します"""
+        lines = []
         for line in content.split('\n'):
             line = line.strip()
             if line:
-                if line.startswith('- '):
-                    formatted_lines.append(f"✦ {line[2:]}")
+                if line.startswith('✦ '):
+                    lines.append(line)
+                elif line.startswith('- '):
+                    lines.append(f"✦ {line[2:]}")
                 else:
-                    formatted_lines.append(line)
-        return '\n'.join(formatted_lines)
+                    lines.append(line)
+        return '\n'.join(lines)
 
     def _format_summary(self, header: str) -> str:
-        lines = header.split('\n')[1:]
-        return '\n'.join(line.strip() for line in lines)
+        """サマリー部分を整形します"""
+        return '\n'.join(
+            line.strip() for line in header.split('\n')[1:]
+            if line.strip()
+        )
 
     def _get_section_icon(self, title: str) -> str:
+        """セクションに対応するアイコンを取得します"""
         icons = {
             'セグメント成長': '📊',
             '新しいトピック': '🆕',
@@ -1109,124 +1141,7 @@ class MarkdownSlackFormatter:
         return icons.get(next((k for k in icons.keys() if k in title), ''), '📌')
 
     def _split_sections(self, content: str) -> Dict[str, any]:
-        parts = content.split('\n1.')
-        header = parts[0].strip()
-        content_sections = []
-        
-        if len(parts) > 1:
-            remaining = '1.' + parts[1]
-            current_section = []
-            
-            for line in remaining.split('\n'):
-                if re.match(r'^\d+\.', line):
-                    if current_section:
-                        content_sections.append('\n'.join(current_section))
-                    current_section = [line]
-                else:
-                    current_section.append(line)
-                    
-            if current_section:
-                content_sections.append('\n'.join(current_section))
-        
-        return {
-            'header': header,
-            'content': content_sections
-        }
-
-================================================================================
-File: src\modules\slack\slack_notify.py
-================================================================================
-
-# src/modules/slack/slack_notify.py
-
-from pathlib import Path
-from slack_sdk import WebClient
-from slack_sdk.errors import SlackApiError
-from utils.logging_config import get_logger
-from utils.drive_handler import DriveHandler
-import os
-import re
-from typing import List, Dict
-from dotenv import load_dotenv
-
-logger = get_logger(__name__)
-
-class MarkdownSlackFormatter:
-    def format_content(self, markdown_content: str) -> Dict:
-        """
-        メッセージ内容をMarkdown形式にフォーマットします。
-
-        Args:
-            markdown_content (str): 元のメッセージ内容
-
-        Returns:
-            Dict: フォーマット済みのメッセージデータ
-        """
-        try:
-            company_name = markdown_content.split('(')[1].split(')')[0]
-        except IndexError:
-            company_name = "不明な会社名"
-
-        sections = self._split_sections(markdown_content)
-
-        return {
-            "attachments": [
-                {
-                    "color": "#36a64f",
-                    "pretext": None,
-                    "mrkdwn_in": ["text", "fields", "title", "footer"],
-                    "title": f"*{company_name}* の決算情報",
-                    "text": self._format_summary(sections['header']),
-                    "fallback": f"{company_name}の決算情報",
-                    "fields": self._format_sections(sections['content']),
-                    "footer": "📑 情報取得元：金融庁 EDINET / GPT4oを使用して要約しています"
-                }
-            ]
-        }
-
-    def _format_sections(self, content_sections: List[str]) -> List[Dict]:
-        fields = []
-        for section in content_sections:
-            matches = re.match(r'(\d+\.\s*)(.*)', section)
-            if matches:
-                title = matches.group(2).strip()
-                content = '\n'.join(section.split('\n')[1:])
-
-                fields.append({
-                    "title": f"{self._get_section_icon(title)} {title}",
-                    "value": self._format_content(title, content),
-                    "short": False
-                })
-        return fields
-
-    def _format_content(self, title: str, content: str) -> str:
-        formatted_lines = []
-        for line in content.split('\n'):
-            line = line.strip()
-            if line:
-                if line.startswith('- '):
-                    formatted_lines.append(f"✦ {line[2:]}")
-                else:
-                    formatted_lines.append(line)
-        formatted_content = '\n'.join(formatted_lines)
-        return formatted_content
-
-    def _format_summary(self, header: str) -> str:
-        lines = header.split('\n')[1:]
-        summary = '\n'.join(line.strip() for line in lines)
-        return summary
-
-    def _get_section_icon(self, title: str) -> str:
-        icons = {
-            'セグメント成長': '📊',
-            '新しいトピック': '🆕',
-            '損益計算書': '💹',
-            '市場や競争環境': '🏢'
-        }
-        icon = icons.get(next((k for k in icons.keys() if k in title), ''), '📌')
-        return icon
-
-    def _split_sections(self, content: str) -> Dict[str, any]:
+        """コンテンツを各セクションに分割します"""
         parts = content.split('\n1.')
         header = parts[0].strip()
         content_sections = []
@@ -1234,7 +1149,6 @@ class MarkdownSlackFormatter:
         if len(parts) > 1:
             remaining = '1.' + parts[1]
             current_section = []
-
             for line in remaining.split('\n'):
                 if re.match(r'^\d+\.', line):
                     if current_section:
@@ -1246,131 +1160,73 @@ class MarkdownSlackFormatter:
             if current_section:
                 content_sections.append('\n'.join(current_section))
 
-        splitted_sections = {
+        return {
             'header': header,
             'content': content_sections
         }
-        return splitted_sections
 
 class SlackNotifier:
+    """
+    Slack通知を処理するクラス。
+    環境設定の管理とメッセージの送信を担当します。
+    """
     def __init__(self, env_path: str = "config/secrets.env"):
-        # 環境変数のロード
+        # 環境変数の設定を読み込み
+        self._load_environment(env_path)
+        
+        # Slackクライアントとフォーマッタを初期化
+        self.client = WebClient(token=self.slack_token)
+        self.formatter = MarkdownSlackFormatter()
+        logger.info("Slack通知システムの初期化が完了しました")
+
+    def _load_environment(self, env_path: str):
+        """環境変数をロードします"""
         dotenv_path = Path(env_path)
         if not dotenv_path.exists():
             raise FileNotFoundError(f".env ファイルが見つかりません: {env_path}")
+        
         load_dotenv(dotenv_path)
-        logger.info(f".env ファイルをロードしました: {dotenv_path}")
-
-        # Slack トークンを取得
+        
         self.slack_token = os.getenv("SLACK_BOT_TOKEN")
         if not self.slack_token:
-            raise ValueError("SLACK_BOT_TOKEN が設定されていません。secrets.env を確認してください。")
-        logger.info("Slack トークンを正常に取得しました。")
+            raise ValueError("SLACK_BOT_TOKEN が設定されていません")
 
-        # Google Drive API 用のサービスアカウントファイルを取得
-        self.service_account_file = os.getenv("SERVICE_ACCOUNT_FILE")
-        if not self.service_account_file or not Path(self.service_account_file).exists():
-            raise FileNotFoundError(f"SERVICE_ACCOUNT_FILE が設定されていないか、ファイルが見つかりません: {self.service_account_file}")
-        logger.info(f"Google Drive サービスアカウントファイルをロードしました: {self.service_account_file}")
+        logger.info("環境設定のロードが完了しました")
 
-        # Slack クライアントを初期化
-        self.client = WebClient(token=self.slack_token)
-        logger.info("Slack クライアントを初期化しました。")
-
-        # Markdownフォーマッタを初期化
-        self.formatter = MarkdownSlackFormatter()
-        logger.info("MarkdownSlackFormatter を初期化しました。")
-
-    def send_formatted_markdown(self, channel: str, markdown_content: str):
+    def send_formatted_markdown(self, channel: str, markdown_content: str, ir_page_url: str):
         """
-        SlackにフォーマットされたMarkdown内容を送信します。
+        フォーマットされたMarkdownをSlackに送信します。
+        ボットの表示名とアイコンをカスタマイズして送信を行います。
 
         Args:
-            channel (str): 送信先のSlackチャンネルID（例: "C01234567"）
-            markdown_content (str): 送信するMarkdown内容
+            channel (str): 送信先のSlackチャンネルID
+            markdown_content (str): 送信するMarkdown形式のコンテンツ
+            ir_page_url (str): IR情報ページのURL
         """
         try:
-            # チャンネル名の形式を確認（チャンネルIDを使用）
-            if not channel.startswith('C'):
-                raise ValueError(f"チャンネルIDの形式が不正です: {channel}")
-
-            # Markdown フォーマットを適用
-            formatted_content = self.formatter.format_content(markdown_content)
-            logger.debug(f"Formatted markdown content: {formatted_content}")
-
-            # メッセージ送信
-            response = self.client.chat_postMessage(
-                channel=channel,
-                **formatted_content
+            formatted_content = self.formatter.format_content(
+                markdown_content, ir_page_url
             )
-            logger.info(f"フォーマット済みコンテンツを送信しました: {response['ts']}")
+            
+            # 基本のメッセージ内容にボットの表示設定を追加
+            message_params = {
+                **formatted_content,  # 既存のフォーマット済みコンテンツ
+                "channel": channel,
+                "username": "決算通知bot",  # ボットの表示名
+                "icon_emoji": ":chart_with_upwards_trend:",  # 📈 グラフ上昇の絵文字
+                # または画像URLを使用する場合：
+                # "icon_url": "https://example.com/path/to/bot-icon.png"
+            }
+            
+            response = self.client.chat_postMessage(**message_params)
+            logger.info(f"Slack通知を送信しました: {response['ts']}")
+                
         except SlackApiError as e:
-            # エラーの詳細を出力
             logger.error(f"Slack API エラー: {e.response['error']}")
-            logger.debug(f"Response: {e.response.data}")
             raise
         except Exception as e:
-            logger.error(f"Markdownフォーマット送信中にエラーが発生しました: {e}")
+            logger.error(f"予期せぬエラーが発生しました: {e}")
             raise
-
-    def send_message(self, channel: str, message: str):
-        """
-        Slack にメッセージを送信します。
-
-        Args:
-            channel (str): Slack チャネル ID
-            message (str): 通知メッセージ
-        """
-        try:
-            # チャンネルIDの形式を確認
-            if not channel.startswith('C'):
-                raise ValueError(f"チャンネルIDの形式が不正です: {channel}")
-
-            # Markdown フォーマットを適用
-            formatted_message = self.formatter.format_content(message)
-            logger.debug(f"Formatted message: {formatted_message}")
-
-            logger.info(f"Slack に通知を送信中: チャネル={channel}, メッセージ={message}")
-            response = self.client.chat_postMessage(channel=channel, **formatted_message)
-            logger.info(f"Slack通知に成功しました: {response['ts']}")
-        except SlackApiError as e:
-            logger.error(f"Slack通知エラー: {e.response['error']}")
-            logger.debug(f"Response: {e.response.data}")
-            raise
-        except Exception as e:
-            logger.error(f"メッセージ送信中にエラーが発生しました: {e}")
-            raise
-
-    def send_file(self, channel: str, file_id: str, title: str = "Markdown File"):
-        """
-        Slack にファイルをアップロードして送信します。
-
-        Args:
-            channel (str): Slack チャネル ID
-            file_id (str): Google Drive のファイル ID
-            title (str): ファイルのタイトル
-        """
-        try:
-            # Google Drive ファイルリンクを生成
-            file_url = f"https://drive.google.com/file/d/{file_id}/view"
-            message_text = f"{title} のリンクを共有します:\n<{file_url}>"
-            logger.debug(f"Formatted file link message: {message_text}")
-
-            logger.info(f"Slack にファイルリンクを送信中: チャネル={channel}, ファイルID={file_id}")
-            response = self.client.chat_postMessage(
-                channel=channel,
-                text=message_text,
-                icon_emoji=":chart_with_upwards_trend:"  # アイコンの追加（オプション）
-            )
-            logger.info(f"Slack ファイルリンクの送信に成功しました: {response['ts']}")
-        except SlackApiError as e:
-            logger.error(f"Slack ファイルリンク送信エラー: {e.response['error']}")
-            logger.debug(f"Response: {e.response.data}")
-            raise
-        except Exception as e:
-            logger.error(f"ファイルリンク送信中にエラーが発生しました: {e}")
-            raise
-
 
 ================================================================================
 File: src\modules\spreadsheet_to_edinet.py
@@ -1384,6 +1240,7 @@ from utils.spreadsheet import SpreadsheetService
 from modules.edinet.operations import EDINETOperations
 from modules.pdfSummary.process_drive_file import process_drive_file
 from utils.drive_handler import DriveHandler
+from utils.date_utils import parse_date_string
 from modules.slack.slack_notify import SlackNotifier
 
 from utils.logging_config import get_logger
@@ -1449,13 +1306,13 @@ def process_spreadsheet_data(config):
         log_sheet_name = "log"
 
         # 日付範囲を取得
-        start_date = datetime.strptime(
-            env.get_config_value("DATE_RANGE", "start_date"), "%Y-%m-%d"
-        )
-        end_date = datetime.strptime(
-            env.get_config_value("DATE_RANGE", "end_date"), "%Y-%m-%d"
-        )
-        logger.info(f"Using date range from settings: {start_date} to {end_date}")
+        try:
+            start_date = parse_date_string(env.get_config_value("DATE_RANGE", "start_date"))
+            end_date = parse_date_string(env.get_config_value("DATE_RANGE", "end_date"))
+            logger.info(f"Using date range from settings: {start_date} to {end_date}")
+        except ValueError as e:
+            logger.error(f"Invalid date range configuration: {e}")
+            raise
 
         # SlackNotifier の初期化
         slack_notifier = SlackNotifier(env_path="config/secrets.env")
@@ -1470,10 +1327,14 @@ def process_spreadsheet_data(config):
 
         headers = list_data[0]
         data_rows = list_data[1:]
-        if "EDINET_code" not in headers:
-            logger.error("'EDINET_code' column not found in the 'list' sheet.")
+        if "EDINET_code" not in headers or "ir_page_url" not in headers or "check" not in headers:
+            logger.error("'EDINET_code', 'ir_page_url', or 'check' column not found in the 'list' sheet.")
             return
+
+        # 必要な列のインデックスを取得
         edinet_code_index = headers.index("EDINET_code")
+        ir_page_url_index = headers.index("ir_page_url")
+        check_index = headers.index("check")
 
         edinet_operations = EDINETOperations()
 
@@ -1482,10 +1343,23 @@ def process_spreadsheet_data(config):
         drive_handler = DriveHandler(str(service_account_file))
 
         for row_index, row in enumerate(data_rows, start=2):
+            # `check`列がTRUEでない場合はスキップ
+            check_value = row[check_index] if check_index < len(row) else "FALSE"
+            if check_value.upper() != "TRUE":
+                logger.info(f"Skipping row {row_index}: check value is not TRUE.")
+                continue
+
+            # 必要なデータを取得
             edinet_code = row[edinet_code_index]
             stock_code = row[headers.index("stock_code")] if "stock_code" in headers else ""
             corp_name = row[headers.index("corp_name")] if "corp_name" in headers else ""
+            ir_page_url = row[ir_page_url_index] if ir_page_url_index < len(row) else ""
+
             logger.info(f"Processing row {row_index}: EDINET_code = {edinet_code}")
+
+            if not ir_page_url:
+                logger.warning(f"No IR page URL found for EDINET_code {edinet_code}.")
+                continue
 
             try:
                 documents = edinet_operations.get_documents_for_date_range(
@@ -1521,7 +1395,6 @@ def process_spreadsheet_data(config):
                         # PDFを要約してGoogle Driveに保存
                         try:
                             summary_file_ids = process_drive_file(file_id, folder_id)
-                            # 要約ファイルのURLを取得
                             summary_urls = [
                                 f"https://drive.google.com/file/d/{fid}/view" for fid in summary_file_ids
                             ]
@@ -1541,7 +1414,7 @@ def process_spreadsheet_data(config):
                                 doc_type_name,
                                 file_name,
                                 file_url,
-                                ", ".join(summary_urls),  # 要約ファイルのURLを追加
+                                ", ".join(summary_urls),
                                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                             ]
                         ]
@@ -1554,10 +1427,10 @@ def process_spreadsheet_data(config):
                         if summary_file_ids:
                             for summary_file_id in summary_file_ids:
                                 try:
-                                    # ファイルの内容を取得
                                     markdown_content = drive_handler.get_file_content(summary_file_id)
-                                    # Slackに送信
-                                    slack_notifier.send_formatted_markdown(slack_channel, markdown_content)
+                                    slack_notifier.send_formatted_markdown(
+                                        slack_channel, markdown_content, ir_page_url
+                                    )
                                     logger.info(f"Slackに要約を送信しました。ファイル ID: {summary_file_id}")
                                 except Exception as e:
                                     logger.error(f"Slack通知中にエラーが発生しました（ファイル ID: {summary_file_id}）: {e}")
@@ -1573,12 +1446,27 @@ def process_spreadsheet_data(config):
         logger.error(f"Failed to process spreadsheet data: {e}")
         raise
 
-
 ================================================================================
 File: src\utils\__init__.py
 ================================================================================
 
  
+
+
+================================================================================
+File: src\utils\date_utils.py
+================================================================================
+
+from datetime import datetime, timedelta
+
+def parse_date_string(date_str: str) -> datetime:
+    """
+    日付文字列を解析して datetime オブジェクトを返す。
+    "yesterday" が指定された場合は前日の日付を返す。
+    """
+    if date_str.lower() == "yesterday":
+        return datetime.now() - timedelta(days=1)
+    return datetime.strptime(date_str, "%Y-%m-%d")
 
 
 ================================================================================

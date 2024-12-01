@@ -1,79 +1,78 @@
-REM save as ANSI/Shift-JIS
 @echo off
-rem Ensure this file is saved with ANSI/Shift-JIS encoding
+rem Ensure this file is saved with UTF-8 encoding
 @echo off
 setlocal enabledelayedexpansion
 
-:: ƒXƒNƒŠƒvƒgî•ñ
+:: ã‚¹ã‚¯ãƒªãƒ—ãƒˆæƒ…å ±
 set "TOOLS_DIR=spec_tools"
 set "LOGS_DIR=%TOOLS_DIR%\logs"
 set "DOCS_DIR=docs"
 
-:: ƒwƒ‹ƒvƒƒbƒZ[ƒW
+:: ãƒ˜ãƒ«ãƒ—ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸
 if "%~1"=="" (
-    echo g—p•û–@:
-    echo   spec_tools_run.bat --merge         : merge_files.py ‚ğÀs
-    echo   spec_tools_run.bat --spec          : generate_spec.py ‚ğÀs
-    echo   spec_tools_run.bat --detailed-spec : generate_detailed_spec.py ‚ğÀs
-    echo   spec_tools_run.bat --all           : ‘S‚Ä‚ğˆêŠ‡Às
-    echo   spec_tools_run.bat --help          : ‚±‚Ìƒwƒ‹ƒv‚ğ•\¦
+    echo ä½¿ç”¨æ–¹æ³•:
+    echo   spec_tools_run.bat --merge         : merge_files.py ã‚’å®Ÿè¡Œ
+    echo   spec_tools_run.bat --spec          : generate_spec.py ã‚’å®Ÿè¡Œ
+    echo   spec_tools_run.bat --detailed-spec : generate_detailed_spec.py ã‚’å®Ÿè¡Œ
+    echo   spec_tools_run.bat --all           : å…¨ã¦ã‚’ä¸€æ‹¬å®Ÿè¡Œ
+    echo   spec_tools_run.bat --help          : ã“ã®ãƒ˜ãƒ«ãƒ—ã‚’è¡¨ç¤º
     goto END
 )
 
-:: ‰¼‘zŠÂ‹«‚Ìƒ`ƒFƒbƒN
+:: ä»®æƒ³ç’°å¢ƒã®ãƒã‚§ãƒƒã‚¯
 if not exist ".\env\Scripts\activate.bat" (
-    echo Error: ‰¼‘zŠÂ‹«‚ª‘¶İ‚µ‚Ü‚¹‚ñBrun.bat ‚Å‰¼‘zŠÂ‹«‚ğì¬‚µ‚Ä‚­‚¾‚³‚¢B
+    echo Error: ä»®æƒ³ç’°å¢ƒãŒå­˜åœ¨ã—ã¾ã›ã‚“ã€‚run.bat ã§ä»®æƒ³ç’°å¢ƒã‚’ä½œæˆã—ã¦ãã ã•ã„ã€‚
     goto END
 )
 
 call .\env\Scripts\activate
 
-:: ƒRƒ}ƒ“ƒh‚Ìˆ—
+:: ã‚³ãƒãƒ³ãƒ‰ã®å‡¦ç†
 if "%~1"=="--merge" (
-    echo [LOG] merge_files.py ‚ğÀs’†...
+    echo [LOG] merge_files.py ã‚’å®Ÿè¡Œä¸­...
     python %TOOLS_DIR%\merge_files.py > %LOGS_DIR%\merge_files.log 2>&1
     if errorlevel 1 (
-        echo Error: merge_files.py ‚ÌÀs‚É¸”s‚µ‚Ü‚µ‚½BƒƒO‚ğŠm”F‚µ‚Ä‚­‚¾‚³‚¢B
+        echo Error: merge_files.py ã®å®Ÿè¡Œã«å¤±æ•—ã—ã¾ã—ãŸã€‚ãƒ­ã‚°ã‚’ç¢ºèªã—ã¦ãã ã•ã„ã€‚
         goto END
     )
-    echo [LOG] merge_files.py ‚ÌÀs‚ªŠ®—¹‚µ‚Ü‚µ‚½B
+    echo [LOG] merge_files.py ã®å®Ÿè¡ŒãŒå®Œäº†ã—ã¾ã—ãŸã€‚
 )
 
 if "%~1"=="--spec" (
-    echo [LOG] generate_spec.py ‚ğÀs’†...
+    echo [LOG] generate_spec.py ã‚’å®Ÿè¡Œä¸­...
     python %TOOLS_DIR%\generate_spec.py > %LOGS_DIR%\generate_spec.log 2>&1
     if errorlevel 1 (
-        echo Error: generate_spec.py ‚ÌÀs‚É¸”s‚µ‚Ü‚µ‚½BƒƒO‚ğŠm”F‚µ‚Ä‚­‚¾‚³‚¢B
+        echo Error: generate_spec.py ã®å®Ÿè¡Œã«å¤±æ•—ã—ã¾ã—ãŸã€‚ãƒ­ã‚°ã‚’ç¢ºèªã—ã¦ãã ã•ã„ã€‚
         goto END
     )
-    echo [LOG] generate_spec.py ‚ÌÀs‚ªŠ®—¹‚µ‚Ü‚µ‚½B
+    echo [LOG] generate_spec.py ã®å®Ÿè¡ŒãŒå®Œäº†ã—ã¾ã—ãŸã€‚
 )
 
 if "%~1"=="--detailed-spec" (
-    echo [LOG] generate_detailed_spec.py ‚ğÀs’†...
+    echo [LOG] generate_detailed_spec.py ã‚’å®Ÿè¡Œä¸­...
     python %TOOLS_DIR%\generate_detailed_spec.py > %LOGS_DIR%\generate_detailed_spec.log 2>&1
     if errorlevel 1 (
-        echo Error: generate_detailed_spec.py ‚ÌÀs‚É¸”s‚µ‚Ü‚µ‚½BƒƒO‚ğŠm”F‚µ‚Ä‚­‚¾‚³‚¢B
+        echo Error: generate_detailed_spec.py ã®å®Ÿè¡Œã«å¤±æ•—ã—ã¾ã—ãŸã€‚ãƒ­ã‚°ã‚’ç¢ºèªã—ã¦ãã ã•ã„ã€‚
         goto END
     )
-    echo [LOG] generate_detailed_spec.py ‚ÌÀs‚ªŠ®—¹‚µ‚Ü‚µ‚½B
+    echo [LOG] generate_detailed_spec.py ã®å®Ÿè¡ŒãŒå®Œäº†ã—ã¾ã—ãŸã€‚
 )
 
 if "%~1"=="--all" (
-    echo [LOG] ‘S‚Ä‚ÌƒXƒNƒŠƒvƒg‚ğˆêŠ‡Às’†...
+    echo [LOG] å…¨ã¦ã®ã‚¹ã‚¯ãƒªãƒ—ãƒˆã‚’ä¸€æ‹¬å®Ÿè¡Œä¸­...
     call %0 --merge
     call %0 --spec
     call %0 --detailed-spec
-    echo [LOG] ‘S‚Ä‚ÌƒXƒNƒŠƒvƒg‚ÌÀs‚ªŠ®—¹‚µ‚Ü‚µ‚½B
+    echo [LOG] å…¨ã¦ã®ã‚¹ã‚¯ãƒªãƒ—ãƒˆã®å®Ÿè¡ŒãŒå®Œäº†ã—ã¾ã—ãŸã€‚
 )
 
 if "%~1"=="--help" (
-    echo g—p•û–@:
-    echo   spec_tools_run.bat --merge         : merge_files.py ‚ğÀs
-    echo   spec_tools_run.bat --spec          : generate_spec.py ‚ğÀs
-    echo   spec_tools_run.bat --detailed-spec : generate_detailed_spec.py ‚ğÀs
-    echo   spec_tools_run.bat --all           : ‘S‚Ä‚ğˆêŠ‡Às
-    echo   spec_tools_run.bat --help          : ‚±‚Ìƒwƒ‹ƒv‚ğ•\¦
+    echo ä½¿ç”¨æ–¹æ³•:
+    echo   spec_tools_run.bat --merge         : merge_files.py ã‚’å®Ÿè¡Œ
+    echo   spec_tools_run.bat --spec          : generate_spec.py ã‚’å®Ÿè¡Œ
+    echo   spec_tools_run.bat --detailed-spec : generate_detailed_spec.py ã‚’å®Ÿè¡Œ
+    echo   spec_tools_run.bat --all           : å…¨ã¦ã‚’ä¸€æ‹¬å®Ÿè¡Œ
+    echo   spec_tools_run.bat --help          : ã“ã®ãƒ˜ãƒ«ãƒ—ã‚’è¡¨ç¤º
 )
 
 :END
