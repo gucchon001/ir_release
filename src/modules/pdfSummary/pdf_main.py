@@ -1,14 +1,15 @@
-#pdf_main.py
-from openai import OpenAI
+# src/modules/pdfSummary/pdf_main.py
+
+import openai  # OpenAI SDK の正しいインポート方法
 from pathlib import Path
 import json
 
 from utils.environment import EnvironmentUtils as env
-from utils.drive_uploader import DriveUploader
+from utils.drive_handler import DriveHandler
 from .extractor import extract_text_from_pdf
 from .tokenizer import Tokenizer
 from .summarizer import Summarizer
-from .drive_handler import DriveHandler
+
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -31,14 +32,14 @@ def load_prompt(file_path: str) -> list:
         logger.error(f"プロンプトのロード中にエラーが発生しました: {e}")
         raise
 
-def process_pdf(pdf_path, folder_id, drive_uploader=None):
+def process_pdf(pdf_path: str, folder_id: str, drive_handler: DriveHandler = None) -> list:
     """
     PDF を処理して要約を作成し、Google Drive に保存します。
 
     Args:
         pdf_path (str): PDF ファイルのパス。
         folder_id (str): 要約を保存する Google Drive フォルダの ID。
-        drive_uploader (DriveUploader, optional): 既存のDriveUploaderインスタンス。
+        drive_handler (DriveHandler, optional): 既存のDriveHandlerインスタンス。
 
     Returns:
         list: Google Drive に保存された要約ファイルの ID のリスト。
@@ -70,19 +71,18 @@ def process_pdf(pdf_path, folder_id, drive_uploader=None):
         raise
 
     # 必要なインスタンスを生成
-    client = OpenAI(api_key=api_key)
+    openai.api_key = api_key  # OpenAI API キーを設定
     tokenizer = Tokenizer(model, max_chunk_tokens)
-    summarizer = Summarizer(client, model, max_summary_tokens, prompt_messages)
+    summarizer = Summarizer(openai, model, max_summary_tokens, prompt_messages)
 
-    # DriveHandlerのインスタンス生成（既存のDriveUploaderがあれば使用）
-    if drive_uploader is None:
-        drive_uploader = DriveUploader()
-    drive_handler = DriveHandler(drive_uploader)
+    # DriveHandlerのインスタンス生成（既存のDriveHandlerがあれば使用）
+    if drive_handler is None:
+        service_account_file = env.get_service_account_file()
+        drive_handler = DriveHandler(str(service_account_file))
 
     # PDFからテキストを抽出
     try:
         text = extract_text_from_pdf(pdf_path)
-        logger.debug(f"PDF テキスト抽出完了。最初の100文字: {text[:100]}...")
     except Exception as e:
         logger.error(f"PDF テキスト抽出中にエラーが発生しました: {e}")
         raise
@@ -91,7 +91,6 @@ def process_pdf(pdf_path, folder_id, drive_uploader=None):
     try:
         chunks = tokenizer.split_text_into_chunks(text)
         summary = summarizer.summarize_text(chunks)
-        logger.debug(f"要約完了。最初の100文字: {summary[:100]}...")
     except Exception as e:
         logger.error(f"要約処理中にエラーが発生しました: {e}")
         raise
@@ -99,19 +98,21 @@ def process_pdf(pdf_path, folder_id, drive_uploader=None):
     # 要約をGoogle Driveに保存
     try:
         file_ids = []
-        if len(summary) > 10000:  # 要約が長すぎる場合に分割保存
+        if len(summary) > 10000:
+            # 要約が長すぎる場合に分割保存
             parts = [summary[i:i+10000] for i in range(0, len(summary), 10000)]
             for idx, part in enumerate(parts):
                 part_file_name = f"{Path(pdf_path).stem}_summary_part_{idx+1}.md"
                 file_id = drive_handler.save_summary_to_drive(folder_id, part, part_file_name)
                 file_ids.append(file_id)
                 logger.info(f"分割要約をGoogle Drive に保存しました。ファイル ID: {file_id}")
-        else:  # 通常保存
+        else:
+            # 通常保存
             file_name = Path(pdf_path).stem + "_summary.md"
             file_id = drive_handler.save_summary_to_drive(folder_id, summary, file_name)
             file_ids.append(file_id)
             logger.info(f"要約をGoogle Drive に保存しました。ファイル ID: {file_id}")
-        return file_ids
+        return file_ids  # 要約ファイルのIDリストを返す
     except Exception as e:
         logger.error(f"Google Drive に保存中にエラーが発生しました: {e}")
         raise
@@ -125,15 +126,15 @@ def test_process_drive_file(file_id: str, drive_folder_id: str):
         drive_folder_id (str): 保存先フォルダのGoogle Drive ID
     """
     try:
-        # DriveUploaderとDriveHandlerのインスタンス作成
-        drive_uploader = DriveUploader()
-        drive_handler = DriveHandler(drive_uploader)
+        # DriveHandlerのインスタンス作成
+        service_account_file = env.get_service_account_file()
+        drive_handler = DriveHandler(str(service_account_file))
         
         # PDFファイルをダウンロードして処理
         local_pdf_path = drive_handler.download_pdf_from_drive(file_id)
         if local_pdf_path:
-            # PDFの処理 - 同じDriveUploaderインスタンスを渡す
-            result = process_pdf(local_pdf_path, drive_folder_id, drive_uploader)
+            # PDFの処理 - DriveHandler を渡す
+            result = process_pdf(local_pdf_path, drive_folder_id, drive_handler)
             
             if result:
                 print(f"処理が完了しました。結果のファイルID: {result}")

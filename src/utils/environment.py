@@ -1,3 +1,4 @@
+#enviroment.py
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -93,7 +94,7 @@ class EnvironmentUtils:
         """
         config_path = EnvironmentUtils.get_config_file()
         config = configparser.ConfigParser()
-        config.read(config_path)
+        config.read(config_path, encoding='utf-8')  # エンコーディングを明示的に指定
 
         if not config.has_section(section):
             return default

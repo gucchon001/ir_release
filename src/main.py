@@ -1,16 +1,17 @@
+#main.py
 from typing import Callable, Optional, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from modules.edinet.operations import EDINETOperations
 from modules.edinet.config import EDINETConfig
 from modules.spreadsheet_to_edinet import process_spreadsheet_data
 from utils.spreadsheet import SpreadsheetService
 from utils.environment import EnvironmentUtils as env
+from utils.date_utils import parse_date_string
 from utils.logging_config import get_logger
 
-# 共通ロガー
-logger = get_logger()
-
+# 名前付きロガーを取得
+logger = get_logger(__name__)
 
 def initialize_debug_tools() -> None:
     """
@@ -19,7 +20,7 @@ def initialize_debug_tools() -> None:
     try:
         use_icecream = env.get_config_value(env.get_environment(), "USE_ICECREAM", default=False)
         # ロガー初期化時にIceCreamの設定を反映
-        get_logger(use_icecream=use_icecream)
+        get_logger(__name__, use_icecream=use_icecream)
     except Exception as e:
         logger.error(f"Failed to initialize debug tools: {e}")
         raise
@@ -33,7 +34,6 @@ def run_process(process_func: Callable, config: Optional[Any] = None) -> None:
     except Exception as e:
         logger.error(f"Error in {process_func.__name__}: {e}", exc_info=True)
         raise RuntimeError(f"Process {process_func.__name__} failed.") from e
-
 
 def edinet_process(config: EDINETConfig) -> None:
     """
@@ -52,10 +52,10 @@ def edinet_process(config: EDINETConfig) -> None:
     if not start_date_str or not end_date_str:
         raise ValueError("DATE_RANGE section or required keys are missing in the settings.ini file.")
 
-    logger.debug(f"Fetching documents from {start_date_str} to {end_date_str}")
-
-    start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
-    end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
+    # 動的な日付解析
+    start_date = parse_date_string(start_date_str)
+    end_date = parse_date_string(end_date_str)
+    
     logger.debug(f"Fetching documents from {start_date} to {end_date}")
 
     spreadsheet_service = SpreadsheetService()
@@ -71,7 +71,7 @@ def edinet_process(config: EDINETConfig) -> None:
     edinet_code_index = headers.index("EDINET_code")
     edinet_codes_from_sheet = [row[edinet_code_index] for row in data_rows]
 
-    logger.info(f"Edinet codes from spreadsheet: {edinet_codes_from_sheet}")
+    logger.info(f"Edinet codes retrieved from spreadsheet.")
 
     documents = edinet.get_documents_for_date_range(
         start_date=start_date,
@@ -81,8 +81,7 @@ def edinet_process(config: EDINETConfig) -> None:
 
     logger.info(f"Total documents retrieved: {len(documents)}")
     for document in documents:
-        logger.info(f"Retrieved Document - ID: {document.get('docID')}, Description: {document.get('docDescription')}")
-
+        logger.debug(f"Retrieved Document - ID: {document.get('docID')}, Description: {document.get('docDescription')}")
 
 def main() -> None:
     """メイン処理"""
@@ -98,7 +97,6 @@ def main() -> None:
         edinet_config = EDINETConfig()
         edinet_config.config_path = config_path
 
-        logger.info("Logger initialized successfully.")
         logger.info(f"Current environment: {env.get_environment()}")
 
         # デバッグツールの初期化
@@ -110,7 +108,6 @@ def main() -> None:
 
     except Exception as e:
         logger.error(f"Fatal error in main execution: {e}", exc_info=True)
-
 
 if __name__ == "__main__":
     main()

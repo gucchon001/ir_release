@@ -1,4 +1,4 @@
-import os
+#config.py
 from pathlib import Path
 from typing import Optional
 from utils.environment import EnvironmentUtils as env
@@ -36,10 +36,6 @@ class EDINETConfig:
         try:
             env.load_env()
             logger.info("Environment variables loaded successfully.")
-
-            # デバッグ用：主要な環境変数を確認
-            for key in ["EDINET_API_KEY", "SERVICE_ACCOUNT_FILE"]:
-                logger.debug(f"{key}: {os.getenv(key)}")
         except FileNotFoundError as e:
             logger.error(f"Environment file not found: {e}")
             raise
@@ -66,7 +62,6 @@ class EDINETConfig:
             self.settings['download_dir'] = env.get_config_value('EDINET', 'download_dir', default="data/edinet")
 
             logger.info("Configuration settings loaded successfully.")
-            logger.debug(f"Loaded settings: {self.settings}")
         except Exception as e:
             logger.error(f"Failed to load settings: {e}")
             raise
@@ -101,8 +96,6 @@ class EDINETConfig:
         resolved_path = Path(path)
         if not resolved_path.is_absolute():
             resolved_path = env.get_project_root() / resolved_path
-
-        logger.debug(f"Resolving path: input={path}, resolved={resolved_path}")
 
         if not resolved_path.exists():
             logger.error(f"Resolved path does not exist: {resolved_path}")

@@ -3,6 +3,7 @@ from pathlib import Path
 from configparser import ConfigParser
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+
 from utils.environment import EnvironmentUtils as env
 from utils.logging_config import get_logger
 
@@ -21,11 +22,9 @@ class SpreadsheetService:
         try:
             # 環境変数または設定ファイルから取得
             service_account_file = os.getenv("SERVICE_ACCOUNT_FILE", "config/service_account.json")
-            self.logger.info(f"Configured service account file: {service_account_file}")
-
+            
             # パスを解決
             service_account_path = self._resolve_path(service_account_file)
-            self.logger.info(f"Resolved service account file path: {service_account_path}")
 
             # Google 認証情報をロード
             if not service_account_path.exists():
@@ -54,8 +53,7 @@ class SpreadsheetService:
             if not config_path.exists():
                 raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
-            self.config.read(config_path)
-            self.logger.info(f"Configuration loaded successfully: {self.config.sections()}")
+            self.config.read(config_path, encoding='utf-8')  # エンコーディングを明示的に指定
         except Exception as e:
             self.logger.error(f"Error loading configuration: {e}")
             raise
@@ -145,7 +143,7 @@ class SpreadsheetService:
                 body=body
             ).execute()
 
-            self.logger.info(f"Data appended successfully to Sheet: {sheet_name}, Response: {response}")
+            self.logger.debug(f"Data appended successfully to Sheet: {sheet_name}, Response: {response}")
             return response
         except Exception as e:
             self.logger.error(f"Error appending data to sheet '{sheet_name}': {e}")
