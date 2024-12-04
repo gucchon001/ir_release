@@ -26,7 +26,6 @@ var/
 
 # Credentials and Config
 json/*.json
-settings.ini
 .env
 config/*.env
 config/*.json
