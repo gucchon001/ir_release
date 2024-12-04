@@ -1,23 +1,21 @@
 # プログラム仕様書
 
----
-
 ## 1. フォルダ構造の解析
 
-以下はプロジェクトのフォルダ構造です。
+### フォルダ構造
 
 ```
-ir_news_release/
-├── .git/
-│   ├── config
-│   ├── description
-│   ├── filter-repo/
-│   ├── hooks/
-│   ├── info/
-│   ├── objects/
-│   ├── refs/
+ir_release/
 ├── .gitignore
 ├── .pytest_cache/
+│   ├── .gitignore
+│   ├── CACHEDIR.TAG
+│   ├── README.md
+│   └── v/
+│       └── cache/
+│           ├── lastfailed
+│           ├── nodeids
+│           └── stepwise
 ├── .req_hash
 ├── README.md
 ├── config/
@@ -25,15 +23,33 @@ ir_news_release/
 │   ├── prompt_financial_report.json
 │   ├── secrets.env
 │   └── settings.ini
-├── data/
 ├── docs/
+│   ├── .gitkeep
 │   ├── detail_spec.txt
-│   ├── generate_detailed_spec.txt
+│   ├── detailed_spec.txt
 │   ├── merge.txt
-│   ├── requirements_spec.txt
+│   └── requirements_spec.txt
 ├── downloads/
+│   ├── E04796_S100UPBR_20241111.pdf
+│   ├── E04823_S100URPY_20241114.pdf
+│   ├── E04824_S100UPMY_20241113.pdf
+│   ├── E04850_S100UPQI_20241113.pdf
+│   ├── E04981_S100USJE_20241118.pdf
+│   ├── E04991_S100UR84_20241114.pdf
+│   ├── E05011_S100UOHD_20241111.pdf
+│   ├── E05024_S100UIEO_20241010.pdf
+│   ├── E05028_S100UMLK_20241106.pdf
+│   ├── E05030_S100UORB_20241114.pdf
+│   ├── E05524_S100UNLM_20241107.pdf
+│   ├── E07801_S100UOGD_20241111.pdf
+│   ├── E21514_S100UPZH_20241114.pdf
+│   ├── E37221_S100UPOF_20241112.pdf
+│   └── E39165_S100URQR_20241114.pdf
+├── logs/
+├── prompt/
 ├── requirements.txt
 ├── run.bat
+├── run_dev.bat
 ├── spec_tools_run.bat
 ├── src/
 │   ├── __init__.py
@@ -41,8 +57,18 @@ ir_news_release/
 │   ├── modules/
 │   │   ├── __init__.py
 │   │   ├── edinet/
+│   │   │   ├── __init__.py
+│   │   │   ├── config.py
+│   │   │   └── operations.py
 │   │   ├── pdfSummary/
+│   │   │   ├── __init__.py
+│   │   │   ├── extractor.py
+│   │   │   ├── pdf_main.py
+│   │   │   ├── process_drive_file.py
+│   │   │   ├── summarizer.py
+│   │   │   └── tokenizer.py
 │   │   ├── slack/
+│   │   │   └── slack_notify.py
 │   │   └── spreadsheet_to_edinet.py
 │   └── utils/
 │       ├── __init__.py
@@ -52,85 +78,168 @@ ir_news_release/
 │       ├── logging_config.py
 │       └── spreadsheet.py
 └── tests/
+    ├── README.md
+    ├── __init__.py
+    ├── test_drive_file.py
+    ├── test_log.py
+    ├── test_logging.py
+    ├── test_slack_notify.py
+    ├── test_slack_notify_with_file.py
+    ├── test_slack_notify_with_markdown.py
+    ├── test_spreadsheet.py
+    └── test_template.py
 ```
 
-### 追加情報
-1. **ファイルの種類**
-   - Pythonコード: `.py`
-   - 設定ファイル: `.json`, `.ini`, `.env`
-   - その他: `.md`, `.bat`, `.txt`, `.pdf`
-2. **ファイル数とフォルダ数の集計**
-   - フォルダ数: 7
-   - ファイル数: 63
+### ファイルの種類と集計
+- **Pythonコード**: `src/` フォルダ以下の `.py` ファイル
+- **設定ファイル**: `config/` フォルダ内の `.json`, `.env`, `.ini` ファイル
+- **その他**: `README.md`, バッチファイル（`.bat`）、ダウンロードしたPDFファイル
 
----
+- **ファイル数**: 49
+- **フォルダ数**: 9
 
 ## 2. ファイルごとの役割と依存関係
 
-| ファイル名                            | 役割                                                                                             | 依存関係                                                                                  |
-|--------------------------------------|--------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------|
-| `src/main.py`                        | エントリーポイント。処理フローを制御。                                                           | `modules.edinet.operations`, `modules.edinet.config`, `utils.spreadsheet`, `utils.environment`, `utils.date_utils`, `utils.logging_config` |
-| `src/modules/edinet/config.py`       | EDINET APIの設定情報を管理。                                                                      | `utils.environment`, `utils.logging_config`                                               |
-| `src/modules/edinet/operations.py`   | EDINET APIを操作し、ドキュメントを取得。                                                          | `utils.environment`, `utils.logging_config`, `requests`, `googleapiclient.discovery`      |
-| `src/modules/pdfSummary/extractor.py`| PDFからテキストを抽出する。                                                                      | `utils.logging_config`                                                                    |
-| `src/modules/pdfSummary/pdf_main.py` | PDFを処理して要約を作成し、Google Driveに保存。                                                   | `utils.environment`, `utils.drive_handler`, `utils.logging_config`, `extractor`, `tokenizer`, `summarizer` |
-| `src/modules/slack/slack_notify.py`  | Slackに通知を送信。                                                                              | `utils.logging_config`, `slack_sdk`                                                       |
-| `src/utils/date_utils.py`            | 日付解析を行うユーティリティ。                                                                    | なし                                                                                       |
-| `src/utils/drive_handler.py`         | Google Driveとのファイル操作を管理。                                                              | `googleapiclient.discovery`, `google.oauth2.service_account`, `utils.logging_config`      |
-| `src/utils/environment.py`           | 環境変数や設定ファイルの管理を行うユーティリティ。                                                | `dotenv`, `configparser`                                                                  |
-| `src/utils/logging_config.py`        | ロギングの設定と初期化を行う。                                                                    | `icecream`                                                                                |
-| `src/utils/spreadsheet.py`           | Googleスプレッドシートの操作を管理。                                                              | `googleapiclient.discovery`, `google.oauth2.service_account`, `utils.environment`, `utils.logging_config` |
+| ファイル名                                 | 役割                                                                 | 依存関係                                                                                     |
+|--------------------------------------------|----------------------------------------------------------------------|----------------------------------------------------------------------------------------------|
+| `src/main.py`                              | エントリーポイント。処理フローを制御。                               | `modules/edinet/config.py`, `modules/edinet/operations.py`, `utils/spreadsheet.py`           |
+| `src/modules/edinet/config.py`             | EDINET API用の設定を管理。                                           | `utils/environment.py`, `utils/logging_config.py`                                            |
+| `src/modules/edinet/operations.py`         | EDINET APIからデータを取得し、Google Driveへのアクセスを管理。       | `utils/environment.py`, `utils/logging_config.py`, `requests`, `googleapiclient`             |
+| `src/modules/pdfSummary/extractor.py`      | PDFからテキストを抽出。                                              | `pymupdf`, `utils/logging_config.py`                                                         |
+| `src/modules/pdfSummary/pdf_main.py`       | PDFを処理し、要約を作成しGoogle Driveに保存。                         | `openai`, `pathlib`, `json`, `utils/environment.py`, `utils/drive_handler.py`                |
+| `src/modules/pdfSummary/process_drive_file.py` | Google DriveのPDFファイルを処理し、要約を生成。                       | `utils/environment.py`, `utils/drive_handler.py`, `utils/logging_config.py`                  |
+| `src/modules/pdfSummary/summarizer.py`     | テキストの要約を行う。                                               | `tiktoken`, `utils/logging_config.py`                                                        |
+| `src/modules/pdfSummary/tokenizer.py`      | テキストを意味的に分割する。                                         | `sentence_transformers`, `tiktoken`, `utils/logging_config.py`                               |
+| `src/modules/slack/slack_notify.py`        | Slack通知を処理。                                                    | `slack_sdk`, `utils/logging_config.py`, `dotenv`                                             |
+| `src/modules/spreadsheet_to_edinet.py`     | スプレッドシートデータを処理し、EDINET APIを呼び出し、結果を保存。   | `datetime`, `utils/environment.py`, `utils/spreadsheet.py`, `utils/drive_handler.py`         |
+| `src/utils/date_utils.py`                  | 日付関連のユーティリティ関数を提供。                                 | なし                                                                                         |
+| `src/utils/drive_handler.py`               | Google Drive API操作を管理。                                         | `googleapiclient`, `google.oauth2`, `pathlib`, `datetime`, `utils/logging_config.py`         |
+| `src/utils/environment.py`                 | 環境変数や設定ファイルの管理を行う。                                 | `os`, `pathlib`, `dotenv`, `configparser`                                                    |
+| `src/utils/logging_config.py`              | ロギングの設定を管理。                                               | `logging`, `logging.handlers`, `datetime`, `pathlib`                                         |
+| `src/utils/spreadsheet.py`                 | スプレッドシート操作を管理。                                         | `google.oauth2`, `googleapiclient`, `utils/environment.py`, `utils/logging_config.py`        |
 
----
+## 3. クラス定義の詳細
 
-## 3. 各ファイル内の関数リスト
+### `EDINETConfig` (src/modules/edinet/config.py)
+- **概要**: EDINET APIの設定を管理。
+- **属性**:
+  - `environment`: `Optional[str]` - 環境名。
+  - `settings`: `Dict[str, Any]` - 設定値の辞書。
+- **メソッド**:
+  - `_load_env`: 環境変数をロード。
+  - `_load_settings`: 設定をロード。
+  - `_validate_settings`: 設定値を検証。
+  - `_resolve_path`: 指定されたパスを解決。
+  - `base_url`: `str` - ベースURLを取得。
+  - `api_key`: `str` - APIキーを取得。
+  - `parent_folder_id`: `str` - 親フォルダIDを取得。
+  - `service_account_file`: `Path` - サービスアカウントファイルのパスを取得。
+  - `get_download_dir`: `Path` - ダウンロードディレクトリのパスを取得。
 
-### ファイル名: `main.py`
-- `initialize_debug_tools`: デバッグツールを初期化。
+### `EDINETOperations` (src/modules/edinet/operations.py)
+- **概要**: EDINET APIからデータを取得し、Google Driveにアクセス。
+- **属性**:
+  - `base_url`: `Optional[str]` - ベースURL。
+  - `api_key`: `Optional[str]` - APIキー。
+  - `parent_folder_id`: `Optional[str]` - Google Driveの親フォルダID。
+  - `service_account_file`: `Optional[str]` - サービスアカウントファイル。
+  - `max_workers`: `int` - 最大スレッド数。
+- **メソッド**:
+  - `initialize_drive_service`: Google Drive APIサービスを初期化。
+  - `get_documents_for_date_range`: 指定期間のEDINET文書を取得。
+  - `fetch_documents_for_date`: 指定日のEDINET文書を取得。
+  - `fetch_document_data`: PDFデータを取得。
+
+### `DriveHandler` (src/utils/drive_handler.py)
+- **概要**: Google Drive APIの操作を管理。
+- **属性**:
+  - `service_account_file`: `str` - サービスアカウントファイルのパス。
+- **メソッド**:
+  - `get_file_content`: ファイルの内容を取得。
+  - `save_summary_to_drive`: 要約をDriveに保存。
+  - `download_pdf_from_drive`: PDFファイルをダウンロード。
+  - `get_or_create_folder`: フォルダを取得または作成。
+  - `upload_file`: ファイルをDriveにアップロード。
+
+### `SpreadsheetService` (src/utils/spreadsheet.py)
+- **概要**: スプレッドシート操作を管理。
+- **属性**:
+  - `credentials`: `Credentials` - Google認証情報。
+  - `service`: `Any` - Google Sheets APIサービス。
+  - `config`: `ConfigParser` - 設定ファイルのパーサー。
+- **メソッド**:
+  - `_resolve_path`: パスを解決。
+  - `get_sheet_data`: スプレッドシートのデータを取得。
+  - `get_spreadsheet_id`: スプレッドシートIDを取得。
+  - `append_sheet_data`: シートにデータを追加。
+
+## 4. 各ファイル内の関数リスト
+
+### ファイル名: src/main.py
 - `run_process`: 汎用プロセス実行関数。
 - `edinet_process`: EDINET APIを使用して指定された期間内のドキュメントを取得。
 - `main`: メイン処理。
 
-### ファイル名: `modules/edinet/config.py`
-- `_load_env`: 環境変数をロードする。
-- `_load_settings`: 設定をEnvironmentUtilsを利用して読み込む。
+### ファイル名: src/modules/edinet/config.py
+- `_load_env`: 環境変数をロード。
+- `_load_settings`: 設定をロード。
 - `_validate_settings`: 設定値の検証。
-- `_resolve_path`: 指定されたパスをプロジェクトルートに基づいて解決する。
-- `base_url`: EDINET APIのベースURLを取得。
-- `api_key`: EDINET APIキーを取得。
-- `parent_folder_id`: Google Driveの親フォルダIDを取得。
-- `service_account_file`: サービスアカウントファイルのパスを取得。
-- `get_download_dir`: ダウンロードディレクトリのパスを取得。
+- `_resolve_path`: パスを解決。
 
-### ファイル名: `modules/edinet/operations.py`
-- `initialize_drive_service`: Google Drive APIサービスの初期化。
+### ファイル名: src/modules/edinet/operations.py
+- `initialize_drive_service`: Google Drive APIサービスを初期化。
 - `get_documents_for_date_range`: 指定期間のEDINET文書を取得。
 - `fetch_documents_for_date`: 指定日のEDINET文書を取得。
-- `fetch_document_data`: EDINET APIからPDFデータを取得。
+- `fetch_document_data`: PDFデータを取得。
 
-### ファイル名: `modules/pdfSummary/extractor.py`
-- `extract_text_from_pdf`: PyMuPDFを使用してPDFからテキストを抽出。
+### ファイル名: src/modules/pdfSummary/extractor.py
+- `extract_text_from_pdf`: PDFからテキストを抽出。
 
-### ファイル名: `modules/pdfSummary/pdf_main.py`
-- `load_prompt`: プロンプトファイルをロードする。
+### ファイル名: src/modules/pdfSummary/pdf_main.py
+- `load_prompt`: プロンプトファイルをロード。
 - `process_pdf`: PDFを処理して要約を作成し、Google Driveに保存。
 - `test_process_drive_file`: Google DriveのPDFファイルを処理するテスト関数。
 
-### ファイル名: `modules/slack/slack_notify.py`
-- `format_content`: MarkdownコンテンツをSlackのBlock Kit形式にフォーマット。
+### ファイル名: src/modules/pdfSummary/process_drive_file.py
+- `process_drive_file`: Google DriveのPDFファイルを処理して要約を生成し、ファイルIDのリストを返す。
+
+### ファイル名: src/modules/pdfSummary/summarizer.py
+- `summarize_chunk`: 単一のチャンクを要約。
+- `summarize_text`: 複数のチャンクをまとめて要約。
+- `_summarize_recursive`: 部分要約が長すぎる場合、さらに分割して再要約。
+
+### ファイル名: src/modules/pdfSummary/tokenizer.py
+- `count_tokens`: テキスト内のトークン数をカウント。
+- `split_text_into_chunks`: 意味的に近いまとまりでテキストを分割。
+
+### ファイル名: src/modules/slack/slack_notify.py
+- `format_content`: MarkdownコンテンツをSlackのBlock Kit形式に変換。
+- `_extract_company_name`: Markdownコンテンツから会社名を抽出。
+- `_create_header_block`: ヘッダーブロックを作成。
+- `_create_section_block`: セクションブロックを作成。
+- `_create_footer_blocks`: フッター情報とボタンブロックを作成。
+- `_format_sections`: セクションの内容をフォーマット。
+- `_format_content_text`: テキストコンテンツを整形。
+- `_format_summary`: サマリー部分を整形。
+- `_get_section_icon`: セクションに対応するアイコンを取得。
+- `_split_sections`: コンテンツを各セクションに分割。
 - `send_formatted_markdown`: フォーマットされたMarkdownをSlackに送信。
 
-### ファイル名: `utils/date_utils.py`
+### ファイル名: src/modules/spreadsheet_to_edinet.py
+- `log_download_to_sheet`: ダウンロードしたデータをログシートに記録。
+- `process_spreadsheet_data`: スプレッドシートデータを基にEDINET APIを呼び出し、結果をGoogle Driveに保存。
+
+### ファイル名: src/utils/date_utils.py
 - `parse_date_string`: 日付文字列を解析してdatetimeオブジェクトを返す。
 
-### ファイル名: `utils/drive_handler.py`
-- `get_file_content`: 指定されたGoogle Driveファイルの内容を取得。
+### ファイル名: src/utils/drive_handler.py
+- `get_file_content`: ファイルの内容を取得。
 - `save_summary_to_drive`: 要約をGoogle Driveに保存。
 - `download_pdf_from_drive`: Google DriveからPDFファイルをダウンロード。
-- `get_or_create_folder`: 指定された名前のフォルダを取得または作成。
+- `get_or_create_folder`: フォルダを取得または作成。
 - `upload_file`: ファイルをGoogle Driveにアップロード。
 
-### ファイル名: `utils/environment.py`
+### ファイル名: src/utils/environment.py
 - `set_project_root`: プロジェクトのルートディレクトリを設定。
 - `get_project_root`: プロジェクトのルートディレクトリを取得。
 - `load_env`: 環境変数を.envファイルからロード。
@@ -143,127 +252,463 @@ ir_news_release/
 - `get_openai_api_key`: OpenAI APIキーを取得。
 - `get_openai_model`: OpenAIモデル名を取得。
 
-### ファイル名: `utils/logging_config.py`
+### ファイル名: src/utils/logging_config.py
 - `setup_logging`: ロギング設定をセットアップ。
-- `initialize_icecream`: IceCreamのデバッグ設定を初期化。
+- `get_logger`: 名前付きロガーを取得。
 
-### ファイル名: `utils/spreadsheet.py`
+### ファイル名: src/utils/spreadsheet.py
+- `_resolve_path`: 与えられたパスを絶対パスに解決。
 - `get_sheet_data`: 指定されたスプレッドシートのデータを取得。
 - `get_spreadsheet_id`: スプレッドシートIDを取得。
 - `append_sheet_data`: 指定されたスプレッドシートのシートに行データを追加。
 
----
+## 5. 関数ごとの詳細仕様
 
-## 4. 関数ごとの詳細仕様
-
-### 関数名: `initialize_debug_tools`
-- **概要**: デバッグツールを初期化。
-- **入力**: なし
-- **出力**: なし
-- **内部処理**:
-  - 環境設定からIceCreamの使用設定を取得。
-  - IceCreamの設定を反映。
-- **依存関係**:
-  - 環境設定: `utils.environment`
-  - ロギング: `utils.logging_config`
-
-### 関数名: `run_process`
+### 関数名: run_process
 - **概要**: 汎用プロセス実行関数。
 - **入力**:
   - `process_func` (Callable): 実行する関数。
   - `config` (Optional[Any]): 設定データ。
 - **出力**: なし
 - **内部処理**:
-  - ログにプロセス開始を記録。
-  - 指定された関数を実行。
-  - 実行後にログに成功を記録。
-  - 例外発生時にはログにエラーを記録し、例外を送出。
+  1. プロセス開始をログに記録。
+  2. 処理を実行。
+  3. エラーがあればログに記録し、例外を送出。
 - **依存関係**:
-  - ロギング: `utils.logging_config`
+  - ログ管理: `logging`モジュール。
+  - 設定情報: `config`から取得。
 
-### 関数名: `edinet_process`
+### 関数名: edinet_process
 - **概要**: EDINET APIを使用して指定された期間内のドキュメントを取得。
 - **入力**:
-  - `config` (EDINETConfig): EDINETの設定。
+  - `config` (EDINETConfig): EDINETの設定情報。
 - **出力**: なし
 - **内部処理**:
-  - EDINETOperationsインスタンスを作成。
-  - 設定から日付範囲を取得。
-  - スプレッドシートからEDINETコードを取得。
-  - ドキュメントを取得し、ログに記録。
+  1. `EDINETOperations`インスタンスを初期化。
+  2. 環境変数から日付範囲を取得。
+  3. スプレッドシートからEDINETコードを取得。
+  4. EDINET APIからドキュメントを取得。
+  5. 取得したドキュメントの情報をログに記録。
 - **依存関係**:
-  - 環境設定: `utils.environment`
-  - スプレッドシート: `utils.spreadsheet`
-  - ロギング: `utils.logging_config`
+  - `EDINETOperations`クラス。
+  - `SpreadsheetService`クラス。
+  - `EnvironmentUtils`クラス。
+  - `parse_date_string`関数。
 
-### 関数名: `extract_text_from_pdf`
-- **概要**: PyMuPDFを使用してPDFからテキストを抽出。
+### 関数名: main
+- **概要**: メイン処理。
+- **入力**: なし
+- **出力**: なし
+- **内部処理**:
+  1. 環境変数をロード。
+  2. 設定ファイルを取得。
+  3. `EDINETConfig`インスタンスを初期化。
+  4. 各プロセスを実行。
+- **依存関係**:
+  - `run_process`関数。
+  - `edinet_process`関数。
+  - `process_spreadsheet_data`関数。
+
+### 関数名: extract_text_from_pdf
+- **概要**: PDFからテキストを抽出。
 - **入力**:
   - `pdf_path` (str): PDFファイルのパス。
-- **出力**: str
+- **出力**: `str` - 抽出されたテキスト。
 - **内部処理**:
-  - PDFを開き、各ページからテキストを抽出。
-  - 抽出したテキストを返す。
+  1. PDFファイルを開く。
+  2. 各ページからテキストを抽出。
+  3. 抽出したテキストを結合。
 - **依存関係**:
-  - ロギング: `utils.logging_config`
+  - `pymupdf`モジュール。
+  - `logging`モジュール。
 
----
+### 関数名: process_pdf
+- **概要**: PDFを処理して要約を作成し、Google Driveに保存。
+- **入力**:
+  - `pdf_path` (str): PDFファイルのパス。
+  - `folder_id` (str): Google DriveフォルダのID。
+  - `drive_handler` (DriveHandler, optional): DriveHandlerインスタンス。
+- **出力**: `list` - 保存された要約ファイルのIDリスト。
+- **内部処理**:
+  1. 環境変数をロード。
+  2. プロンプトをロード。
+  3. PDFからテキストを抽出。
+  4. テキストを分割し要約。
+  5. 要約をGoogle Driveに保存。
+- **依存関係**:
+  - `extract_text_from_pdf`関数。
+  - `Tokenizer`クラス。
+  - `Summarizer`クラス。
+  - `DriveHandler`クラス。
 
-## 5. データフローとモジュール相互作用
+### 関数名: process_drive_file
+- **概要**: Google DriveのPDFファイルを処理して要約を生成し、ファイルIDのリストを返す。
+- **入力**:
+  - `file_id` (str): Google DriveファイルのID。
+  - `drive_folder_id` (str): 保存先フォルダのGoogle Drive ID。
+- **出力**: `list` - 要約ファイルのGoogle DriveファイルIDのリスト。
+- **内部処理**:
+  1. PDFファイルをダウンロード。
+  2. PDFを処理して要約を生成。
+  3. 要約を保存。
+- **依存関係**:
+  - `DriveHandler`クラス。
+  - `process_pdf`関数。
 
-- **入力元**: 
-  - `main.py`が`config.py`から設定情報を取得。
-  - `operations.py`でEDINET APIからデータを取得し、ローカルに保存。
-  - 保存されたファイルをGoogle Driveにアップロード。
+### 関数名: summarize_chunk
+- **概要**: 単一のチャンクを要約。
+- **入力**:
+  - `chunk` (str): 要約対象のテキストチャンク。
+- **出力**: `str` - 要約されたテキスト。
+- **内部処理**:
+  1. OpenAI APIを使用して要約を生成。
+  2. 要約を返す。
+- **依存関係**:
+  - `openai`モジュール。
 
-- **処理順序**: 
-  1. `main.py`で環境変数と設定ファイルをロード。
-  2. `edinet_process`関数でEDINET APIからドキュメントを取得。
-  3. `pdf_main.py`でPDFを処理し、要約を作成。
-  4. `drive_handler.py`で要約をGoogle Driveに保存。
-  5. `slack_notify.py`で要約をSlackに通知。
+### 関数名: summarize_text
+- **概要**: 複数のチャンクをまとめて要約。
+- **入力**:
+  - `chunks` (list): 要約対象のテキストチャンクのリスト。
+- **出力**: `str` - 要約されたテキスト。
+- **内部処理**:
+  1. 各チャンクをまとめて要約。
+  2. 要約を返す。
+- **依存関係**:
+  - `openai`モジュール。
 
-- **出力先**: 
-  - 処理結果はGoogle Driveに保存され、Slackに通知される。
+### 関数名: count_tokens
+- **概要**: テキスト内のトークン数をカウント。
+- **入力**:
+  - `text` (str): トークン数をカウントするテキスト。
+- **出力**: `int` - トークン数。
+- **内部処理**:
+  1. テキストをエンコード。
+  2. トークン数を返す。
+- **依存関係**:
+  - `tiktoken`モジュール。
 
----
+### 関数名: split_text_into_chunks
+- **概要**: 意味的に近いまとまりでテキストを分割。
+- **入力**:
+  - `text` (str): 分割するテキスト。
+- **出力**: `list` - 分割されたテキストチャンクのリスト。
+- **内部処理**:
+  1. テキストを文単位に分割。
+  2. 文をエンコーディングしてセンテンスエンベディングを取得。
+  3. 意味的に近い文をグループ化。
+- **依存関係**:
+  - `sentence_transformers`モジュール。
+  - `tiktoken`モジュール。
 
-## 6. 非機能要件と技術要件
+### 関数名: format_content
+- **概要**: MarkdownコンテンツをSlackのBlock Kit形式に変換。
+- **入力**:
+  - `markdown_content` (str): 変換対象のMarkdownテキスト。
+  - `ir_page_url` (str): IR情報ページへのURL。
+- **出力**: `Dict` - Block Kit形式のメッセージ構造。
+- **内部処理**:
+  1. 会社名を抽出。
+  2. コンテンツをセクションに分割。
+  3. 各セクションをフォーマット。
+- **依存関係**:
+  - `re`モジュール。
 
-### **非機能要件**
-- **パフォーマンス要件**: 各ドキュメントの処理時間を1分以内に抑える。
-- **セキュリティ要件**: APIキーや認証情報は環境変数で管理し、コード内に含めない。
-- **スケーラビリティ**: 並列処理を使用して複数ドキュメントを同時に処理可能。
+### 関数名: send_formatted_markdown
+- **概要**: フォーマットされたMarkdownをSlackに送信。
+- **入力**:
+  - `channel` (str): 送信先のSlackチャンネルID。
+  - `markdown_content` (str): 送信するMarkdown形式のコンテンツ。
+  - `ir_page_url` (str): IR情報ページのURL。
+- **出力**: なし
+- **内部処理**:
+  1. コンテンツをフォーマット。
+  2. Slack APIを使用してメッセージを送信。
+- **依存関係**:
+  - `slack_sdk`モジュール。
 
-### **技術要件**
-- **Pythonバージョン**: 3.8以降
-- **必要な外部ライブラリ**:
-  - `requests`: APIへのHTTPリクエスト。
-  - `google-api-python-client`: Google Drive API操作。
-  - `slack-sdk`: Slack通知。
-  - `pymupdf`: PDFテキスト抽出。
-  - `openai`: OpenAI API接続。
+### 関数名: log_download_to_sheet
+- **概要**: ダウンロードしたデータをログシートに記録。
+- **入力**:
+  - `spreadsheet_service` (SpreadsheetService): スプレッドシートサービスインスタンス。
+  - `spreadsheet_id` (str): スプレッドシートID。
+  - `log_sheet_name` (str): ログシート名。
+  - `log_data` (list): 記録するログデータ。
+- **出力**: なし
+- **内部処理**:
+  1. シートデータを取得。
+  2. データをシートに追加。
+- **依存関係**:
+  - `SpreadsheetService`クラス。
 
----
+### 関数名: process_spreadsheet_data
+- **概要**: スプレッドシートデータを基にEDINET APIを呼び出し、結果をGoogle Driveに保存。
+- **入力**:
+  - `config` (EDINETConfig): EDINETの設定情報。
+- **出力**: なし
+- **内部処理**:
+  1. 環境変数と設定ファイルをロード。
+  2. スプレッドシートデータを取得。
+  3. EDINET APIを呼び出し、結果を保存。
+- **依存関係**:
+  - `EDINETOperations`クラス。
+  - `SpreadsheetService`クラス。
+  - `DriveHandler`クラス。
 
-## 7. 使用手順と注意事項
+### 関数名: parse_date_string
+- **概要**: 日付文字列を解析してdatetimeオブジェクトを返す。
+- **入力**:
+  - `date_str` (str): 解析する日付文字列。
+- **出力**: `datetime` - 解析された日付。
+- **内部処理**:
+  1. "yesterday"の場合は前日の日付を返す。
+  2. それ以外は日付文字列を解析。
+- **依存関係**: なし
 
-### セットアップ
-1. 必要なライブラリをインストール:
-   ```bash
-   pip install -r requirements.txt
-   ```
-2. 環境変数を設定:
-   ```bash
-   export EDINET_API_KEY=<your_api_key>
-   ```
+### 関数名: get_file_content
+- **概要**: 指定されたGoogle Driveファイルの内容を取得。
+- **入力**:
+  - `file_id` (str): Google DriveファイルのID。
+- **出力**: `str` - ファイルの内容。
+- **内部処理**:
+  1. ファイルのメディアを取得。
+  2. 内容をデコード。
+- **依存関係**:
+  - `googleapiclient`モジュール。
 
-### 実行方法
-- 実行コマンド:
-  ```bash
-  python main.py
-  ```
+### 関数名: save_summary_to_drive
+- **概要**: 要約をGoogle Driveに保存。
+- **入力**:
+  - `folder_id` (str): 保存先フォルダのID。
+  - `summary` (str): 保存する要約内容。
+  - `file_name` (str): 保存するファイル名。
+- **出力**: `str` - 保存されたファイルのID。
+- **内部処理**:
+  1. ファイルメタデータを設定。
+  2. ファイルをアップロード。
+- **依存関係**:
+  - `googleapiclient`モジュール。
 
-### 注意事項
-- **エラーハンドリング**: すべての例外はログに記録され、適切に処理される。
-- **ログ管理**: ログファイルは`logs/`ディレクトリに保存され、日次でローテーションされる。
+### 関数名: download_pdf_from_drive
+- **概要**: Google DriveからPDFファイルをダウンロード。
+- **入力**:
+  - `file_id` (str): ダウンロードするファイルのGoogle Drive ID。
+- **出力**: `str` - ダウンロードしたファイルのローカルパス。
+- **内部処理**:
+  1. ファイルメタデータを取得。
+  2. ファイルをダウンロード。
+- **依存関係**:
+  - `googleapiclient`モジュール。
+
+### 関数名: get_or_create_folder
+- **概要**: 指定された名前のフォルダを取得または作成。
+- **入力**:
+  - `folder_name` (str): フォルダ名。
+  - `parent_folder_id` (str, optional): 親フォルダのID。
+- **出力**: `str` - フォルダのID。
+- **内部処理**:
+  1. フォルダを検索。
+  2. 存在しない場合は作成。
+- **依存関係**:
+  - `googleapiclient`モジュール。
+
+### 関数名: upload_file
+- **概要**: ファイルをGoogle Driveにアップロード。
+- **入力**:
+  - `file_name` (str): アップロードするファイル名。
+  - `file_content` (bytes): アップロードするファイルの内容。
+  - `folder_id` (str): アップロード先のフォルダID。
+  - `mime_type` (str): ファイルのMIMEタイプ。
+- **出力**: `str` - アップロードされたファイルのID。
+- **内部処理**:
+  1. 同名ファイルを検索。
+  2. 存在しない場合はアップロード。
+- **依存関係**:
+  - `googleapiclient`モジュール。
+
+### 関数名: set_project_root
+- **概要**: プロジェクトのルートディレクトリを設定。
+- **入力**:
+  - `path` (Path): 新しいプロジェクトルート。
+- **出力**: なし
+- **内部処理**:
+  1. プロジェクトルートを設定。
+- **依存関係**: なし
+
+### 関数名: get_project_root
+- **概要**: プロジェクトのルートディレクトリを取得。
+- **入力**: なし
+- **出力**: `Path` - プロジェクトのルートディレクトリ。
+- **内部処理**:
+  1. 現在のプロジェクトルートを返す。
+- **依存関係**: なし
+
+### 関数名: load_env
+- **概要**: 環境変数を.envファイルからロード。
+- **入力**:
+  - `env_file` (Optional[Path]): .envファイルのパス。
+- **出力**: なし
+- **内部処理**:
+  1. .envファイルを読み込み、環境変数を設定。
+- **依存関係**:
+  - `dotenv`モジュール。
+
+### 関数名: get_env_var
+- **概要**: 環境変数を取得。
+- **入力**:
+  - `key` (str): 環境変数のキー。
+  - `default` (Optional[Any]): デフォルト値。
+- **出力**: `Any` - 環境変数の値またはデフォルト値。
+- **内部処理**:
+  1. 環境変数を取得し、デフォルト値を返す。
+- **依存関係**: なし
+
+### 関数名: get_config_file
+- **概要**: 設定ファイルのパスを取得。
+- **入力**:
+  - `file_name` (str): 設定ファイル名。
+- **出力**: `Path` - 設定ファイルのパス。
+- **内部処理**:
+  1. 設定ファイルのパスを返す。
+- **依存関係**: なし
+
+### 関数名: get_config_value
+- **概要**: 設定ファイルから指定のセクションとキーの値を取得。
+- **入力**:
+  - `section` (str): セクション名。
+  - `key` (str): キー名。
+  - `default` (Optional[Any]): デフォルト値。
+- **出力**: `Any` - 設定値。
+- **内部処理**:
+  1. 設定ファイルから値を取得し、デフォルト値を返す。
+- **依存関係**:
+  - `configparser`モジュール。
+
+### 関数名: resolve_path
+- **概要**: 指定されたパスをプロジェクトルートに基づいて絶対パスに変換。
+- **入力**:
+  - `path` (str): 相対パスまたは絶対パス。
+- **出力**: `Path` - 解決された絶対パス。
+- **内部処理**:
+  1. パスを解決し、絶対パスを返す。
+- **依存関係**: なし
+
+### 関数名: get_service_account_file
+- **概要**: サービスアカウントファイルのパスを取得。
+- **入力**: なし
+- **出力**: `Path` - サービスアカウントファイルの絶対パス。
+- **内部処理**:
+  1. サービスアカウントファイルのパスを取得し、絶対パスを返す。
+- **依存関係**: なし
+
+### 関数名: get_environment
+- **概要**: 環境変数APP_ENVを取得。
+- **入力**: なし
+- **出力**: `str` - 現在の環境。
+- **内部処理**:
+  1. 環境変数を取得し、デフォルト値を返す。
+- **依存関係**: なし
+
+### 関数名: get_openai_api_key
+- **概要**: OpenAI APIキーを取得。
+- **入力**: なし
+- **出力**: `str` - OpenAI APIキー。
+- **内部処理**:
+  1. 環境変数からAPIキーを取得。
+- **依存関係**: なし
+
+### 関数名: get_openai_model
+- **概要**: OpenAIモデル名を取得。
+- **入力**: なし
+- **出力**: `str` - OpenAIモデル名。
+- **内部処理**:
+  1. 設定ファイルからモデル名を取得。
+- **依存関係**: なし
+
+### 関数名: setup_logging
+- **概要**: ロギング設定をセットアップ。
+- **入力**: なし
+- **出力**: なし
+- **内部処理**:
+  1. ログディレクトリを作成。
+  2. ログファイルを設定。
+  3. ロギングを初期化。
+- **依存関係**:
+  - `logging`モジュール。
+
+### 関数名: get_logger
+- **概要**: 名前付きロガーを取得。
+- **入力**:
+  - `name` (Optional[str]): ロガー名。
+- **出力**: `logging.Logger` - 名前付きロガー。
+- **内部処理**:
+  1. ロギングを初期化。
+  2. 名前付きロガーを取得。
+- **依存関係**:
+  - `logging`モジュール。
+
+### 関数名: _resolve_path
+- **概要**: 与えられたパスを絶対パスに解決。
+- **入力**:
+  - `path` (str): 解決するパス。
+- **出力**: `Path` - 絶対パス。
+- **内部処理**:
+  1. パスを解決し、絶対パスを返す。
+- **依存関係**: なし
+
+### 関数名: get_sheet_data
+- **概要**: 指定されたスプレッドシートのデータを取得。
+- **入力**:
+  - `spreadsheet_id` (str): スプレッドシートID。
+  - `sheet_name` (str): シート名。
+- **出力**: `List[List[str]]` - スプレッドシートのデータ。
+- **内部処理**:
+  1. スプレッドシートのデータを取得。
+- **依存関係**:
+  - `googleapiclient`モジュール。
+
+### 関数名: get_spreadsheet_id
+- **概要**: スプレッドシートIDを取得。
+- **入力**:
+  - `section` (str): 設定ファイルのセクション名。
+  - `option` (str): 設定項目名。
+- **出力**: `str` - スプレッドシートID。
+- **内部処理**:
+  1. 設定ファイルからスプレッドシートIDを取得。
+- **依存関係**:
+  - `ConfigParser`モジュール。
+
+### 関数名: append_sheet_data
+- **概要**: 指定されたスプレッドシートのシートに行データを追加。
+- **入力**:
+  - `spreadsheet_id` (str): スプレッドシートID。
+  - `sheet_name` (str): シート名。
+  - `rows` (list): 追加する行データのリスト。
+- **出力**: `dict` - APIのレスポンス。
+- **内部処理**:
+  1. スプレッドシートにデータを追加。
+- **依存関係**:
+  - `googleapiclient`モジュール。
+
+## 6. データフローとモジュール相互作用
+
+### 入力元
+- **`config` フォルダ**: 設定情報を管理（例: `settings.ini`, `secrets.env`）。
+- **`src/modules/edinet/config.py`**: EDINET APIの設定を取得。
+- **`src/utils/environment.py`**: 環境変数を取得。
+- **`src/utils/spreadsheet.py`**: スプレッドシートデータを取得。
+
+### 処理順序
+1. `src/main.py`がエントリーポイントとして動作。
+2. 環境変数と設定情報をロード。
+3. `EDINETConfig`がEDINET APIの設定を初期化。
+4. `EDINETOperations`がEDINET APIからデータを取得。
+5. `SpreadsheetService`がスプレッドシートデータを取得し、処理。
+6. `DriveHandler`がGoogle Driveにデータを保存。
+7. `SlackNotifier`がSlackに通知を送信。
+
+### 出力先
+- **Google Drive**: 処理結果がGoogle Driveに保存。
+- **Slack**: 処理結果がSlackに通知。
+
+この仕様書では、プロジェクトのフォルダ構造、ファイルの役割と依存関係、クラスと関数の仕様、データフローについて詳述しました。これにより、プロジェクトの全体像を把握でき、さらなる開発や保守に役立てることができます。

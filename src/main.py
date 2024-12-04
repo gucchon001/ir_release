@@ -13,18 +13,6 @@ from utils.logging_config import get_logger
 # 名前付きロガーを取得
 logger = get_logger(__name__)
 
-def initialize_debug_tools() -> None:
-    """
-    デバッグツールを初期化
-    """
-    try:
-        use_icecream = env.get_config_value(env.get_environment(), "USE_ICECREAM", default=False)
-        # ロガー初期化時にIceCreamの設定を反映
-        get_logger(__name__, use_icecream=use_icecream)
-    except Exception as e:
-        logger.error(f"Failed to initialize debug tools: {e}")
-        raise
-
 def run_process(process_func: Callable, config: Optional[Any] = None) -> None:
     """汎用プロセス実行関数"""
     try:
@@ -98,9 +86,6 @@ def main() -> None:
         edinet_config.config_path = config_path
 
         logger.info(f"Current environment: {env.get_environment()}")
-
-        # デバッグツールの初期化
-        initialize_debug_tools()
 
         # 各プロセスの実行
         run_process(edinet_process, edinet_config)

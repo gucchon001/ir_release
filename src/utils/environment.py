@@ -176,7 +176,7 @@ class EnvironmentUtils:
     @staticmethod
     def get_openai_model():
         """
-        Get the OpenAI model name from the environment variables.
-        Defaults to 'gpt-4o' if not explicitly set.
+        OpenAI モデル名を settings.ini ファイルから取得します。
+        設定がない場合はデフォルト値 'gpt-4o' を返します。
         """
-        return os.getenv("OPENAI_MODEL", "gpt-4o")
+        return EnvironmentUtils.get_config_value("OPENAI", "model", default="gpt-4o")

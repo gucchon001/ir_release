@@ -1,125 +1,163 @@
-#merge_files.py
-from anytree import Node, RenderTree
+# merge_files.py
 import os
-from typing import Optional
-import logging
-import utils
-from icecream import ic
-from datetime import datetime
 import argparse
-import fnmatch
+from typing import Optional, List, Tuple
+import logging
 
-# ロガー設定
-log_filename = f"merge_files_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(log_filename, encoding="utf-8")
-    ]
+from utils import (
+    setup_logger,
+    read_settings,
+    get_python_files,
+    read_file_safely,
+    write_file_content,
+    ensure_directories_exist,
+    generate_tree_structure
 )
-logger = logging.getLogger(__name__)
 
 class PythonFileMerger:
-    def __init__(self, settings_path: str = 'config/settings.ini'):
-        """INI設定を読み込んでマージャーを初期化"""
-        try:
-            self.settings = utils.read_settings(settings_path)
-            self.project_dir = os.path.abspath(self.settings['source_directory'])
-            self.output_dir = os.path.join(self.project_dir, 'docs')
-            self.output_filename = self.settings['output_file']
+    """
+    Pythonファイルをマージするクラス。
+    指定されたディレクトリからPythonファイルを収集し、
+    フォルダ構造とファイル内容を統合した出力ファイルを生成する。
+    """
 
-            ic(self.project_dir)
-            ic(self.output_dir)
-            ic(self.output_filename)
-            
-            if not os.path.exists(self.output_dir):
-                os.makedirs(self.output_dir)
+    def __init__(self, settings_path: str = 'config/settings.ini', logger: Optional[logging.Logger] = None):
+        """
+        INI設定を読み込んでマージャーを初期化。
 
-            # 除外ディレクトリとファイルパターン
-            self.exclude_dirs = ['env', 'myenv', '__pycache__', 'spec_tools', 'logs', 'log', '.git', 'downloads', 'data']
-            self.exclude_files = ['*.log']
-            ic(self.exclude_dirs)
-            ic(self.exclude_files)
+        Args:
+            settings_path (str): 設定ファイルのパス。
+            logger (Optional[logging.Logger]): 使用するロガー。指定がなければ新規作成。
+        """
+        self.logger = logger or setup_logger("PythonFileMerger")
+        self.settings = read_settings(settings_path)
 
-            logger.info(f"Initialized with project_dir: {self.project_dir}")
-        except Exception as e:
-            logger.error(f"Failed to initialize PythonFileMerger: {str(e)}")
-            raise
+        self.project_dir = os.path.abspath(self.settings['source_directory'])
+        self.output_dir = os.path.join(self.project_dir, 'docs')
+        self.output_filename = self.settings['output_file']
 
-    def _generate_tree_structure_with_anytree(self, root_dir: str) -> str:
-        """`anytree` を使用してディレクトリ構造を生成"""
-        def add_nodes(parent_node, parent_path):
-            try:
-                for item in sorted(os.listdir(parent_path)):
-                    item_path = os.path.join(parent_path, item)
-                    # ディレクトリを除外条件に基づきチェック
-                    if os.path.isdir(item_path):
-                        if item not in self.exclude_dirs:
-                            dir_node = Node(item, parent=parent_node)
-                            add_nodes(dir_node, item_path)
-                    # ファイルを除外条件に基づきチェック
-                    elif not any(fnmatch.fnmatch(item, pattern) for pattern in self.exclude_files):
-                        Node(item, parent=parent_node)
-            except PermissionError:
-                pass  # アクセス権限のないディレクトリをスキップ
+        self.logger.debug(f"Project directory: {self.project_dir}")
+        self.logger.debug(f"Output directory: {self.output_dir}")
+        self.logger.debug(f"Output filename: {self.output_filename}")
 
-        root_node = Node(os.path.basename(root_dir))
-        add_nodes(root_node, root_dir)
-        tree_str = "\n".join([f"{pre}{node.name}" for pre, _, node in RenderTree(root_node)])
-        return tree_str
+        ensure_directories_exist([self.output_dir])
 
-    def process(self) -> Optional[str]:
-        """ファイルマージ処理を実行"""
-        try:
-            logger.info(f"Collecting Python files from {self.project_dir}...")
-            python_files = utils.get_python_files(self.project_dir, self.exclude_dirs)
+        # 除外ディレクトリとファイルパターン
+        self.exclude_dirs: List[str] = self.settings.get('exclusions', '').split(',')
+        self.exclude_files: List[str] = ['*.log']
 
-            if not python_files:
-                logger.warning(f"No Python files found in {self.project_dir}")
-                return None
+        self.logger.debug(f"Excluded directories: {self.exclude_dirs}")
+        self.logger.debug(f"Excluded file patterns: {self.exclude_files}")
 
-            # `anytree` を使ってフォルダ構造を取得
-            tree_structure = self._generate_tree_structure_with_anytree(self.project_dir)
-            merged_content = f"{tree_structure}\n\n# Merged Python Files\n\n"
+        self.logger.info("PythonFileMergerの初期化に成功しました。")
 
-            # Pythonファイルの内容を結合
-            for rel_path, filepath in sorted(python_files):
-                content = utils.read_file_safely(filepath)
-                if content is not None:
-                    merged_content += f"\n{'='*80}\nFile: {rel_path}\n{'='*80}\n\n{content}\n"
-                else:
-                    logger.warning(f"Skipped file due to read error: {filepath}")
+    def _generate_tree_structure(self) -> str:
+        """
+        anytreeを使用してディレクトリ構造を生成する。
+        """
+        return generate_tree_structure(self.project_dir, self.exclude_dirs, self.exclude_files)
 
-            # 結果を保存
-            output_path = os.path.join(self.output_dir, self.output_filename)
-            output_success = utils.write_file_content(output_path, merged_content)
+    def _collect_python_files(self) -> List[Tuple[str, str]]:
+        """
+        プロジェクトディレクトリからPythonファイルを収集する。
+        """
+        self.logger.info(f"{self.project_dir} からPythonファイルを収集中...")
+        python_files = get_python_files(self.project_dir, self.exclude_dirs)
+        self.logger.debug(f"収集したPythonファイル: {python_files}")
+        return python_files
 
-            if output_success:
-                logger.info(f"Successfully wrote merged content to {output_path}")
-                return output_path
+    def _merge_files_content(self, python_files: List[Tuple[str, str]]) -> str:
+        """
+        Pythonファイルの内容をマージする。
+        """
+        merged_content = ""
+
+        if not python_files:
+            self.logger.warning("マージするPythonファイルが見つかりません。")
+            return merged_content
+
+        tree_structure = self._generate_tree_structure()
+        merged_content += f"{tree_structure}\n\n# Merged Python Files\n\n"
+
+        for rel_path, filepath in sorted(python_files):
+            content = read_file_safely(filepath)
+            if content is not None:
+                merged_content += f"\n{'='*80}\nFile: {rel_path}\n{'='*80}\n\n{content}\n"
+                self.logger.debug(f"ファイルをマージしました: {rel_path}")
             else:
-                logger.error(f"Failed to write merged content to {output_path}")
-                return None
-        except Exception as e:
-            logger.error(f"Error during file merge operation: {e}")
+                self.logger.warning(f"読み込みエラーのためスキップしました: {filepath}")
+
+        return merged_content
+
+    def _write_output(self, content: str) -> Optional[str]:
+        """
+        マージされた内容を出力ファイルに書き込む。
+        """
+        if not content:
+            self.logger.warning("出力する内容がありません。")
             return None
 
+        output_path = os.path.join(self.output_dir, self.output_filename)
+        success = write_file_content(output_path, content)
+
+        if success:
+            self.logger.info(f"マージされた内容を正常に書き込みました: {output_path}")
+            return output_path
+        else:
+            self.logger.error(f"マージされた内容の書き込みに失敗しました: {output_path}")
+            return None
+
+    def process(self) -> Optional[str]:
+        """
+        ファイルマージ処理を実行する。
+        """
+        try:
+            python_files = self._collect_python_files()
+
+            if not python_files:
+                self.logger.warning("マージ処理を中止します。Pythonファイルが見つかりません。")
+                return None
+
+            merged_content = self._merge_files_content(python_files)
+            return self._write_output(merged_content)
+        except Exception as e:
+            self.logger.error(f"ファイルマージ処理中にエラーが発生しました: {e}")
+            return None
+
+
 def merge_py_files(settings_path: str = 'config/settings.ini') -> Optional[str]:
-    """マージ処理のエントリーポイント"""
+    """
+    マージ処理のエントリーポイント。
+    """
+    logger = setup_logger("merge_py_files")
+    logger.info("Pythonファイルのマージ処理を開始します。")
     try:
-        logger.info("Starting Python files merge process")
-        merger = PythonFileMerger(settings_path=settings_path)
+        merger = PythonFileMerger(settings_path=settings_path, logger=logger)
         return merger.process()
     except Exception as e:
-        logger.error(f"Error in merge operation: {e}")
+        logger.error(f"マージ処理中に予期せぬエラーが発生しました: {e}")
         return None
 
-if __name__ == "__main__":
+
+def parse_arguments() -> argparse.Namespace:
+    """
+    コマンドライン引数を解析する。
+    """
     parser = argparse.ArgumentParser(description="Merge Python files into a single output.")
-    parser.add_argument("--settings", type=str, default="config/settings.ini", help="Path to the settings.ini file")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--settings",
+        type=str,
+        default="config/settings.ini",
+        help="Path to the settings.ini file"
+    )
+    return parser.parse_args()
+
+
+def main():
+    """
+    メイン関数。コマンドライン引数を解析し、マージ処理を実行する。
+    """
+    args = parse_arguments()
 
     try:
         print("Starting merge_files.py...")
@@ -130,3 +168,7 @@ if __name__ == "__main__":
             print("Merge failed. Check logs for details.")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
+
+
+if __name__ == "__main__":
+    main()

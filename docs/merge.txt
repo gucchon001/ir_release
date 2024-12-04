@@ -1,4 +1,4 @@
-ir_news_release
+ir_release
 ├── .gitignore
 ├── .pytest_cache
 │   ├── .gitignore
@@ -19,11 +19,30 @@ ir_news_release
 ├── docs
 │   ├── .gitkeep
 │   ├── detail_spec.txt
-│   ├── generate_detailed_spec.txt
+│   ├── detailed_spec.txt
 │   ├── merge.txt
 │   └── requirements_spec.txt
+├── downloads
+│   ├── E04796_S100UPBR_20241111.pdf
+│   ├── E04823_S100URPY_20241114.pdf
+│   ├── E04824_S100UPMY_20241113.pdf
+│   ├── E04850_S100UPQI_20241113.pdf
+│   ├── E04981_S100USJE_20241118.pdf
+│   ├── E04991_S100UR84_20241114.pdf
+│   ├── E05011_S100UOHD_20241111.pdf
+│   ├── E05024_S100UIEO_20241010.pdf
+│   ├── E05028_S100UMLK_20241106.pdf
+│   ├── E05030_S100UORB_20241114.pdf
+│   ├── E05524_S100UNLM_20241107.pdf
+│   ├── E07801_S100UOGD_20241111.pdf
+│   ├── E21514_S100UPZH_20241114.pdf
+│   ├── E37221_S100UPOF_20241112.pdf
+│   └── E39165_S100URQR_20241114.pdf
+├── logs
+├── prompt
 ├── requirements.txt
 ├── run.bat
+├── run_dev.bat
 ├── spec_tools_run.bat
 ├── src
 │   ├── __init__.py
@@ -41,7 +60,6 @@ ir_news_release
 │   │   │   ├── process_drive_file.py
 │   │   │   ├── summarizer.py
 │   │   │   └── tokenizer.py
-│   │   ├── setup.py
 │   │   ├── slack
 │   │   │   └── slack_notify.py
 │   │   └── spreadsheet_to_edinet.py
@@ -57,6 +75,7 @@ ir_news_release
     ├── __init__.py
     ├── test_drive_file.py
     ├── test_log.py
+    ├── test_logging.py
     ├── test_slack_notify.py
     ├── test_slack_notify_with_file.py
     ├── test_slack_notify_with_markdown.py
@@ -91,18 +110,6 @@ from utils.logging_config import get_logger
 
 # 名前付きロガーを取得
 logger = get_logger(__name__)
-
-def initialize_debug_tools() -> None:
-    """
-    デバッグツールを初期化
-    """
-    try:
-        use_icecream = env.get_config_value(env.get_environment(), "USE_ICECREAM", default=False)
-        # ロガー初期化時にIceCreamの設定を反映
-        get_logger(__name__, use_icecream=use_icecream)
-    except Exception as e:
-        logger.error(f"Failed to initialize debug tools: {e}")
-        raise
 
 def run_process(process_func: Callable, config: Optional[Any] = None) -> None:
     """汎用プロセス実行関数"""
@@ -177,9 +184,6 @@ def main() -> None:
         edinet_config.config_path = config_path
 
         logger.info(f"Current environment: {env.get_environment()}")
-
-        # デバッグツールの初期化
-        initialize_debug_tools()
 
         # 各プロセスの実行
         run_process(edinet_process, edinet_config)
@@ -938,20 +942,6 @@ class Tokenizer:
         logger.info(f"分割されたチャンク数: {len(clusters)}")
         return clusters
 
-
-================================================================================
-File: src\modules\setup.py
-================================================================================
-
-# setup.py
-from setuptools import setup, find_packages
-
-setup(
-    name="ir_news_release",
-    version="0.1",
-    packages=find_packages(),
-    package_dir={"": "src"}
-)
 
 ================================================================================
 File: src\modules\slack\slack_notify.py
@@ -1891,31 +1881,29 @@ class EnvironmentUtils:
     @staticmethod
     def get_openai_model():
         """
-        Get the OpenAI model name from the environment variables.
-        Defaults to 'gpt-4o' if not explicitly set.
+        OpenAI モデル名を settings.ini ファイルから取得します。
+        設定がない場合はデフォルト値 'gpt-4o' を返します。
         """
-        return os.getenv("OPENAI_MODEL", "gpt-4o")
+        return EnvironmentUtils.get_config_value("OPENAI", "model", default="gpt-4o")
 
 ================================================================================
 File: src\utils\logging_config.py
 ================================================================================
 
+# logging_config.py
 import logging
 import logging.handlers
 from datetime import datetime
 from pathlib import Path
-from icecream import ic
 from typing import Optional
+
 
 class LoggingConfig:
     _initialized = False
 
-    def __init__(self, use_icecream: bool = False):
+    def __init__(self):
         """
         ログ設定を初期化します。
-
-        Args:
-            use_icecream (bool): IceCreamデバッグを有効化するか
         """
         if LoggingConfig._initialized:
             return  # 再初期化を防止
@@ -1923,10 +1911,8 @@ class LoggingConfig:
         self.log_dir = Path("logs")
         self.log_level = logging.INFO
         self.log_format = "%(asctime)s - %(name)s - [%(levelname)s] - %(message)s"
-        self.use_icecream = use_icecream
 
         self.setup_logging()
-        self.initialize_icecream()
 
         LoggingConfig._initialized = True  # 初期化済みフラグを設定
 
@@ -1954,29 +1940,18 @@ class LoggingConfig:
 
         logging.getLogger().info("Logging setup complete.")
 
-    def initialize_icecream(self) -> None:
-        """
-        IceCreamのデバッグ設定を初期化します。
-        """
-        if self.use_icecream:
-            ic.configureOutput(includeContext=True)
-            logging.getLogger().info("IceCream debugging enabled.")
-        else:
-            ic.disable()
-            logging.getLogger().info("IceCream debugging disabled.")
 
-def get_logger(name: Optional[str] = None, use_icecream: bool = False) -> logging.Logger:
+def get_logger(name: Optional[str] = None) -> logging.Logger:
     """
     名前付きロガーを取得します。
 
     Args:
         name (Optional[str]): ロガー名
-        use_icecream (bool): IceCreamデバッグを有効化するか
 
     Returns:
         logging.Logger: 名前付きロガー
     """
-    LoggingConfig(use_icecream=use_icecream)
+    LoggingConfig()
     return logging.getLogger(name)
 
 
@@ -2205,6 +2180,80 @@ def test_logging():
 
 if __name__ == "__main__":
     test_logging()
+
+
+================================================================================
+File: tests\test_logging.py
+================================================================================
+
+# tests/test_logging.py
+
+import unittest
+import logging
+import os
+from pathlib import Path
+from src.utils.logging_config import get_logger, LoggingConfig
+
+class TestLogging(unittest.TestCase):
+    def setUp(self):
+        # LoggingConfig のシングルトンをリセット
+        LoggingConfig._initialized = False
+
+        # ログディレクトリとログファイルのパスを設定
+        self.log_dir = Path("logs")
+        self.log_dir.mkdir(exist_ok=True)
+        
+        # テスト用のログファイル名を設定
+        self.log_file = self.log_dir / "test_logging.log"
+        
+        # 既存のログファイルがあれば削除
+        if self.log_file.exists():
+            os.remove(self.log_file)
+        
+        # ロガーの取得（テスト用のログファイルを指定し、log_level を DEBUG に設定、再初期化を許可）
+        self.logger = get_logger("test_logging", log_file=self.log_file, log_level="DEBUG", reset=True)
+
+    def tearDown(self):
+        # ロギングをシャットダウンしてメッセージをフラッシュ
+        logging.shutdown()
+
+    def test_logging_levels(self):
+        # 各ログレベルのメッセージをログに記録
+        self.logger.debug("DEBUG メッセージ")
+        self.logger.info("INFO メッセージ")
+        self.logger.warning("WARNING メッセージ")
+        self.logger.error("ERROR メッセージ")
+        self.logger.critical("CRITICAL メッセージ")
+
+        # ロギングをシャットダウンしてメッセージをフラッシュ
+        logging.shutdown()
+
+        # ログファイルの存在確認
+        self.assertTrue(self.log_file.exists(), "ログファイルが作成されていません。")
+
+        # ログファイルの内容を確認
+        with open(self.log_file, "r", encoding="utf-8") as f:
+            logs = f.read()
+            self.assertIn("DEBUG メッセージ", logs)
+            self.assertIn("INFO メッセージ", logs)
+            self.assertIn("WARNING メッセージ", logs)
+            self.assertIn("ERROR メッセージ", logs)
+            self.assertIn("CRITICAL メッセージ", logs)
+
+    def test_icecream_enabled(self):
+        # IceCreamの有効化を確認するテスト
+        try:
+            from icecream import ic
+            self.logger.debug("IceCreamテスト")
+            ic("IceCreamが有効です。")
+            # 実際の出力をキャプチャする方法が必要
+            # ここでは単純にエラーが発生しないことを確認
+            self.assertTrue(True)
+        except ImportError:
+            self.fail("IceCreamがインポートできません。")
+
+if __name__ == "__main__":
+    unittest.main()
 
 
 ================================================================================

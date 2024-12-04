@@ -18,18 +18,17 @@ if "%~1"=="--help" (
     echo   run.bat [スクリプトパス] [オプション]
     echo
     echo オプション:
-    echo   --env [dev|prd|test] : 実行環境を指定します。
-    echo                         ^(dev=development, prd=production, test=test^)
+    echo   --env [dev|prd] : 実行環境を指定します。
+    echo                         ^(dev=development, prd=production^)
     echo   --help               : このヘルプを表示します。
     echo
     echo 環境モード:
     echo   dev  : 開発者用環境、詳細なログとデバッグ情報を表示
     echo   prd  : 本番運用環境、安定性重視でユーザー向け
-    echo   test : テストモード
     echo
     echo 例:
     echo   run.bat src\main.py --env dev
-    echo   run.bat --test
+    echo   run.bat --prd
     goto END
 )
 
@@ -38,11 +37,9 @@ if "%~1"=="" (
     echo 実行環境を選択してください:
     echo   1. Development (dev)
     echo   2. Production (prd)
-    echo   3. Test (test)
     set /p "CHOICE=選択肢を入力してください (1/2/3): "
     if "%CHOICE%"=="1" set "APP_ENV=development"
     if "%CHOICE%"=="2" set "APP_ENV=production"
-    if "%CHOICE%"=="3" set "APP_ENV=test"
     if not defined APP_ENV (
         echo Error: 無効な選択肢です。再実行してください。
         exit /b 1
